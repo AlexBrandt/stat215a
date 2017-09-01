@@ -1,0 +1,4 @@
+name = "Alexander Brandt"
+SID = "24092167"
+email = "ajbrandt@berkeley.edu"
+github_name = "AlexBrandt"
