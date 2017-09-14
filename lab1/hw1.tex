@@ -1,0 +1,69 @@
+\documentclass[12pt, oneside]{article}
+\usepackage[margin=1in]{geometry}
+\geometry{letterpaper}
+%\geometry{landscape}
+%\usepackage[parfill]{parskip}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\pagenumbering{arabic}		
+\usepackage{amssymb}
+\usepackage{pdfpages}
+\usepackage{listings}
+\usepackage{mathtools}
+\usepackage[utf8]{inputenc}
+
+
+\title{Homework 1}
+\author{Alexander Brandt\\STAT 215A}
+
+\DeclarePairedDelimiter\ceil{\lceil}{\rceil}
+\DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
+
+\newcommand{\cpder}[3]{\left(\frac{\partial#1}{\partial#2}\right)_{#3}} %Constrained partial derivate
+\newcommand{\pder}[2]{\left(\frac{\partial#1}{\partial#2}\right)} %Partial derivate
+\newcommand{\dbar}{\ensuremath{\mathchar'26\mkern-12mu d}}
+\newcommand{\nPr}[2]{ {_{#1}}P_{#2} } %Partial derivate
+
+\DeclareMathOperator{\E}{\mathbb{E}}
+\DeclareMathOperator{\V}{\mathbb{V}}
+
+
+\begin{document}
+
+\maketitle
+
+\section{Hypothesis testing, the t-distribution}
+
+\subsection{}
+
+\begin{align*}
+s_{\text{pooled}}^2 = \frac{(n_1 - 1)s_1^2 + (n_2 - 1)s_2^2}{n_1+n_2-2}
+\end{align*}
+and if \(n_1 = n_2\) and \(s_1 = s_2\):
+
+\begin{align*}
+s_{\text{pooled}} = \frac{1}{2}\left(\frac{1}{n-1} \right) \left( \sum_{i=1}^n (x_i - \bar x)^2 + (y_i - \bar y)^2 \right)
+\end{align*}
+
+\subsection{}
+
+\begin{align*}
+\E[s_{\text{pooled}}^2] 	&= \frac{1}{2}\left(\frac{1}{n-1} \right) \E\left[\left( \sum_{i=1}^n (x_i - \bar x)^2 + (y_i - \bar y)^2 \right)\right] \\
+					&= \frac{1}{2}\left(\frac{1}{n-1} \right) \left[ \sum_{i=1}^{n} \left( \E \left[(x_i - \bar x)^2\right] +  \E \left[(y_i - \bar y)^2\right] \right) \right]\\
+					&= \frac{\V[X] + \V[Y]}{2(n-1)}\\
+					&= \frac{(n-1)\sigma^2 + (n-1)\sigma^2}{2(n-1)}\\
+\E[s_{\text{pooled}}^2]	&= \sigma^2
+\end{align*}
+
+\subsection{}
+
+
+
+
+
+\section{Questions from Freedman}
+
+\section{Questions from Broad Street}
+
+
+\end{document}
