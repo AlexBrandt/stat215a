@@ -1,0 +1,576 @@
+\documentclass{article}
+
+\author{SID: 25928461}
+\title{Lab 1 - Redwood Data\\ Stat 215A, Fall 2017}
+\date{}
+\usepackage{geometry}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+
+\geometry{verbose,tmargin=1in,bmargin=1in,lmargin=1in,rmargin=1in}
+
+\begin{document}
+\maketitle
+\bibliographystyle{bmc_article}
+
+<<read_library, cache=FALSE, echo=FALSE, message=FALSE>>=
+
+library(knitr)
+library(tidyverse)
+library(chron)
+library(scales)
+library(gridExtra)
+library(xtable)
+library(forcats)
+library(lubridate)
+library(stringr)
+
+opts_chunk$set(fig.width=5, fig.height=3, fig.pos='h!', fig.align='center', echo=FALSE, message=FALSE)
+@
+
+
+
+
+<<setup, echo = FALSE, message=FALSE, warning=FALSE>>=
+
+# load in the loadData() functions
+source("R/load.R")
+# load in the cleanData() functions
+source("R/clean.R")
+@
+
+<<load-data, echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE>>=
+# note that the cache = TRUE chunk argument means that the results of this 
+# chunk are saved so it doesn't need to be re-run every time you compile the pdf
+
+# load the dates data
+dates.orig <- loadDatesData(path = "data/")
+# clean the dates data
+dates <- cleanDatesData(dates.orig)
+
+# load the redwood sensor data
+redwood.all.orig <- loadRedwoodData(path = "data/", source = "all")
+redwood.net.orig <- loadRedwoodData(path = "data/", source = "net")
+redwood.log.orig <- loadRedwoodData(path = "data/", source = "log")
+# clean the redwood sensor data
+redwood.all <- cleanRedwoodData(redwood.all.orig)
+redwood.net <- cleanRedwoodData(redwood.net.orig)
+redwood.log <- cleanRedwoodData(redwood.log.orig)
+
+# load in the mote location data
+mote.orig <- loadMoteLocationData(path = "data/")
+mote <- cleanMoteLocationData(mote.orig)
+@
+
+
+
+<<nodes, echo=FALSE,cache=TRUE>>=
+log.mote.interior <- inner_join(redwood.log, mote, by = "nodeid") %>% 
+  filter(tree == "interior")
+log.mote.edge <- inner_join(redwood.log, mote, by = "nodeid") %>% 
+  filter(tree == "edge")
+net.mote.interior <- inner_join(redwood.net, mote, by = "nodeid") %>% 
+  filter(tree == "interior")
+net.mote.edge <- inner_join(redwood.net, mote, by = "nodeid") %>% 
+  filter(tree == "edge")
+
+
+
+n.log.interior <- length(unique(log.mote.interior$nodeid))
+n.log.edge <- length(unique(log.mote.edge$nodeid))
+n.net.interior <- length(unique(net.mote.interior$nodeid))
+n.net.edge <- length(unique(net.mote.edge$nodeid))
+@
+
+\section{Introduction}
+This report will examine the macro-climate of two Redwood trees located in Sonoma, California over approximately one month. The data was collected by Tolle \emph{et al.}~\cite{tolle_macroscope_2005} in 2004 and unfortunately contains a large number of data entry errors and inconsistencies. As a result, a large amount of data cleaning was performed prior to analysis. In Section 2, the data as well as the data cleaning procedures are described. In Section 3, the figures presented in the original paper by Tolle \emph{et al.} are discussed in terms of what questions they were trying to answer, how successful they were in answering them and whether or not they raised any questions not addressed in the original text. The main findings arising from the data anlaysis are described in Section 4, and each finding is accompanied by a descriptive graphic.
+
+\section{The Data}
+\label{sec:data}
+
+The raw data contains a large number of measurements collected from two trees in the Sonoma region (one tree was located at the edge of the forest, and the other in the forest interior). Data was collected both from a wireless sensor network (the network dataset) and from a data logger (the log dataset). The data logger supplied data from \Sexpr{n.log.edge} nodes located on the tree at the edge of the forest and \Sexpr{n.log.interior} nodes located on the tree in the interior of the forest. The wireless sensor network, on the other hand, provided measurements from \Sexpr{n.net.interior} nodes located on the interior forest tree but no measurements were recorded for the tree on the edge of the forest.
+
+
+
+\subsection{Data Collection}
+The data collection procedure is described in detail in Tolle \emph{et al.}, and is summarized here. Each tree contained a network of nodes deployed at various locations throughout the tree. Each node in the network contained a number of sensors which took measurements of air temperature $(^o$C), relative humidity (\%) and PAR (photosynthetically active solar radiation) from both on top of the node (incident PAR) and below the node (reflective PAR). This report will focus primarily on temperature, humidity and incident PAR. The nodes were located at various heights (ranging from 15m above ground level to 70m above ground level, with roughly a 2m spacing between nodes), various angular locations (although most of the nodes were facing South, South-West and West-South-West) and various radial distances from the trunk (most were very close to the trunk, however a small number were placed further out). Throughout the study, each sensor was designed to take a measurement every 5 minutes, for which the network was awake for 4 seconds while the data was collected and transferred back to the base station.\\
+\noindent Each node contained a battery and two sensor boards confined within a sealed cylindrical enclosure designed to reflect most of the radiated heat. One sensor board captured radiation and the other captured temperature and humidity. The sensors were calibrated and subsequently reset prior to deployment. The nodes began recording prior to installation to ensure that the nodes were operating correctly and to ensure that they could all synchronize with the gateway receiving the data. However, as we will see below, there are large parts of the study where either a number of the sensors were not working, or the data collected was not recorded. \\
+
+
+
+\subsection{Data Cleaning}
+
+<<data_summary,echo=FALSE,cache=TRUE>>=
+n.log <- nrow(redwood.log)
+n.net <- nrow(redwood.net)
+
+matches <- inner_join(select(redwood.net, nodeid, epoch),
+                      select(redwood.log, nodeid, epoch),
+                      by=c("nodeid", "epoch"))
+n.node.log <- length(unique(redwood.log$nodeid))
+n.node.net <- length(unique(redwood.net$nodeid))
+n.node.both <- length(unique(matches$nodeid))
+@
+
+
+Unfortunately there were a number of misleading and erroneous measurements contained in this dataset. For example, there were large numbers of missing values, resulting in entire days with no data recorded. There were also several ambiguous variables as well as a number of measurements which made no sense.\\
+\noindent According to Tolle \emph{et al.}, it was intended that the data collected by the data logger and the wireless network were equivalent. However an initial glance at each dataset showed that the data logger recorded significantly more measurements than did the wireless network. In particular, the data collected by the logger contains \Sexpr{prettyNum(n.log, big.mark = ",")} observations while the data collected by the network contains \Sexpr{prettyNum(n.net, big.mark = ",")} observations, which is less than half of that recorded by the data logger.\\
+\noindent Next, a brief comparison showed that the data logger dataset contains measurements on a total of \Sexpr{n.node.log} nodes (30 from the interior forest tree, 39 from the edge forest tree, and 3 nodes for which it is unclear to which tree they correspond), while the network dataset contains measurements only on \Sexpr{n.node.net} nodes (29 of these are located on the interior forest tree, 1 is located on the edge tree but contains only 4 measurements and so is probably an error, and there is 1 node for which it is unclear to which tree the node corresponds). \Sexpr{n.node.both} of the nodes were common to both the wireless network and the data logger datasets. 
+
+<<missing_data, cache=TRUE, echo=FALSE, message=FALSE>>=
+n.node.log <- group_by(redwood.log, nodeid) %>% summarize(n = n())
+n.node.net <- group_by(redwood.net, nodeid) %>% summarize(n = n())
+n.node.lognet <- inner_join(n.node.log, n.node.net, by = "nodeid")
+colnames(n.node.lognet) <- c("nodeid","n.log","n.net")
+
+
+# log nodes with < 1000 obs: 2, 24, 27, 29, 40, 62, 109, 114, 200 and 65535
+few.data.log <- unlist(filter(n.node.log, n < 1000) %>% select(nodeid))
+names(few.data.log) <- NULL
+# net nodes with <1000 obs: 3, 22, 78, 135, 144, 145, 196, 198
+few.data.net <- unlist(filter(n.node.net, n < 1000) %>% select(nodeid))
+names(few.data.net) <- NULL
+@
+
+<<plotobs,echo=FALSE,cache=TRUE,fig.cap="Histogram showing the number of observations for the net dataset (red) obverlaid onto a histogram showing the number of observations for the log dataset (blue) versus time", warning=FALSE, message=FALSE>>=
+
+vars.rem.log <- which(colnames(redwood.log) %in% c("humid_adj","parent","depth"))
+redwood.log <- redwood.log[ ,-vars.rem.log]
+
+vars.rem.net <- which(colnames(redwood.net) %in% c("humid_adj","parent","depth"))
+redwood.net <- redwood.net[ ,-vars.rem.net]
+
+
+# put correct times in log
+redwood.log <- inner_join(redwood.log, dates, by="epoch")
+redwood.net <- inner_join(redwood.net, dates, by="epoch")
+
+
+ggplot(redwood.log) + 
+  geom_histogram(aes(x = mdy(date)), col = "white", alpha = 0.5, fill = "blue") +
+  xlab("time") + ylab("# obs") + ggtitle("log (blue) and net (red)") +
+  theme(text = element_text(size=10)) +
+  scale_y_continuous(limits = c(0,30000)) +
+  geom_histogram(data=redwood.net,aes(mdy(date)), col= "white", fill = "red",alpha=0.5) 
+@
+
+<<vars,echo=FALSE,message=FALSE,cache=TRUE>>=
+vars <- colnames(redwood.log)
+@
+
+
+
+\noindent Of these nodes, there are \Sexpr{length(few.data.log)} nodes for which the data logger contained less than 1,000 observations and \Sexpr{length(few.data.net)} nodes for which the network provided less than 1,000 observations. Given that the expected number of observations is approximately 12,000, this corresponds to a lot of missing data. The number of overall observations made over time from both the data logger and the wireless network is presented in Figure~\ref{fig:plotobs}. Unfortunately, there are approximately two weeks (one week at either end of the 44-day study) for which the data logger collected measurements and the wireless network did not. Although the number of observations received via the wireless network remained fairly constant (when data was recorded, that is), this was clearly not the case for the data logs. After May 5th the number of observations made daily approximately halves, and in the days following May 25th, the number of observations made by the log dataset was reduced to almost none. According to Tolle \emph{et al.}, this corresponds to when the data logs ``filled up''. Overall, for the observations that are common to both the data obtained from the data logger and the wireless network, the measurements are very similar (although the voltage reported in the network dataset has an inverse relationship to the voltage reported in the log dataset such that $\text{log voltage} = \alpha+ \frac{\beta}{\text{net voltage}}$). Thus this report will focus on the data received from the data logs for values prior to May 26, and will not examine the wireless network data in any great detail.\\
+
+
+
+
+
+
+
+\noindent The data contains the following variables: 
+\begin{itemize}
+\item \texttt{result\_time}: the time at which each measurement was taken
+\item \texttt{epoch}: ID number for each measurement time
+\item \texttt{nodeid}: ID number for each node
+\item \texttt{voltage}: voltage
+\item \texttt{humidity}: relative humidity (\%)
+\item \texttt{humidity\_temp} (renamed to be \texttt{temp}): temperature $(^o$C)
+\item \texttt{humidity\_adj}: undefined
+\item \texttt{hamatop}: incident PAR
+\item \texttt{hamabot}: reflective PAR
+\end{itemize}
+as well as \texttt{parent} and \texttt{depth}, whose definitions are both cited as ``network structure'', however no further explanation was provided either in the documentation supplied with the dataset, nor in Tolle \emph{et al.}'s paper. With this in mind, \texttt{parent} and \texttt{depth} were removed from the data. The variable \texttt{humid\_adj} appeared to be extremely similar to the \texttt{humidity} variable and so was also removed. Strangely, there are a number of \texttt{humidity} observations which are either greater than 100 or less than 0. Intuitively this makes no sense as relative humidity is defined percentage and so should be between 0 and 100. However, the humidity values above 100\% visually appeared to fit with the data so were left alone and it was assumed that these values were due to a minor calibration error. The humidity values below zero, on the other hand, appeared to correspond to measurements recorded by a faulty node, which displayed strange voltage behaviour and which also recorded temperatures of approximately $-40^o$C and incident PAR measurements much higher than seemed reasonable (see Figures~\ref{fig:voltage_plot} and~\ref{fig:outlier}).\\
+
+
+
+<<voltage,echo=FALSE,message=FALSE,cache=TRUE,results='hide'>>=
+
+low.voltage <- group_by(redwood.log,nodeid) %>%
+               summarize(n.die = sum(voltage < 2 & voltage >1), n.novolt = sum(voltage <1),perc.die = n.die/n(), perc.novolt = n.novolt/n())
+low.voltage <- filter(low.voltage, n.die != 0 | n.novolt !=0)
+# Generate a column in the df which will be used for coloring the plot
+log.edit <- mutate(redwood.log, outlier = "normal voltage") 
+log.edit$outlier[log.edit$nodeid %in% 29] = "node dies"
+log.edit$outlier[log.edit$nodeid %in% c(128,134,135,141,142,143,145,65535)] = "no voltage"
+
+
+
+outlier.bound = 800
+high.voltage <- group_by(redwood.net,nodeid) %>%
+  summarize(n.outliers = sum(voltage > outlier.bound), perc = n.outliers/n())
+high.voltage <- filter(high.voltage, n.outliers != 0)
+print(high.voltage)
+# voltage seems to have a completely different meaning for this dataset
+# different scale and everything -- whaaaaat?
+# seeing nodes 134, 135, 141, 145
+
+
+# plot the voltage with the low voltage nodes coloured turquoise
+set.seed(1)
+# generate a random sample of size 10000
+index <- sample(1:nrow(redwood.net),10000)
+
+# Generate a column in the df which will be used for coloring the plot
+net.edit <- mutate(redwood.net, outlier = "normal voltage") 
+net.edit$outlier[net.edit$nodeid %in% high.voltage$nodeid] = "outlier voltage"
+
+
+@
+
+<<voltage_plot,echo=FALSE,message=FALSE,cache=TRUE,fig.cap="Voltage versus time for the data obtained from the data logger">>=
+# plot the voltage with the low voltage nodes coloured turquoise
+set.seed(1) 
+# generate a random sample of size 10000
+index <- sample(1:nrow(redwood.log),10000)
+# plot the voltage with respect to time
+ ggplot(log.edit[index,]) + 
+  geom_point(aes(x = mdy(date), y = voltage, color = outlier), alpha = 0.5) + 
+  xlab("time") 
+
+
+
+
+@
+
+
+
+
+<<outlier,message=FALSE,echo=FALSE,warning=FALSE,cache=TRUE,fig.height=5,fig.width=7,fig.cap="Scatterplot of each variable versus time in the data logger dataset. The color of each point corresponds to Figure 2">>=
+set.seed(100)
+# generate a random sample of size 10000
+index <- sample(1:nrow(redwood.log),10000) 
+
+plot.humid <- ggplot(log.edit[index,]) + 
+  geom_point(aes(x = mdy(date), y = humidity, col = outlier), alpha = 0.5) + ylab("% humidity") +
+  ggtitle("Humidity") + xlab("time")  + scale_colour_discrete(guide = FALSE) 
+
+plot.temp <- ggplot(log.edit[index,]) + 
+  geom_point(aes(x = mdy(date), y = humid_temp, col = outlier), alpha = 0.5) + ylab("degrees celcius") +
+  ggtitle("Temperature") + xlab("time") + scale_colour_discrete(guide = FALSE) 
+
+plot.hamatop <- ggplot(log.edit[index,]) + 
+  geom_point(aes(x = mdy(date), y = hamatop, col = outlier), alpha = 0.5) + ylab("PAR") + 
+  ggtitle("Incident PAR") + xlab("time") + scale_colour_discrete(guide = FALSE) 
+
+plot.hamabot <- ggplot(log.edit[index,]) + 
+  geom_point(aes(x = mdy(date), y = hamabot, col = outlier), alpha = 0.5) + ylab("PAR") +
+  ggtitle("Reflected PAR") + xlab("time") + scale_colour_discrete(guide = FALSE)
+
+grid.arrange(plot.humid, plot.temp, plot.hamatop, plot.hamabot, ncol=2)
+@
+
+\noindent Although Tolle \emph{et al.} discarded all nodes whose voltage readings dipped below 2.4, for this report, only one such node was discarded, since, as mentioned above, a closer look showed that this node was giving the erroneous humidity and temperature measurements. There were a number of other nodes whose voltage readings were constant at 0.6, however, the other measurements taken by these nodes appear to be within normal ranges, and so no action was taken (Figures~\ref{fig:voltage_plot} and~\ref{fig:outlier}). A summary of the nodes which were entirely removed is presented in Table 1.
+
+
+
+<<logrm,echo=FALSE,cache=TRUE,results='asis'>>=
+
+nodes.remove.log <- data.frame(nodeid = c(2, 24, 27, 29, 40, 62, 109, 114, 200, 65535, 15, 122, 128, 29, 29, 65535, 29, 29, 40),
+                               reason = c("Fewer than 1000 obs", "Fewer than 1000 obs", "Fewer than 1000 obs", "Fewer than 1000 obs", "Fewer than 1000 obs", "Fewer than 1000 obs", "Fewer than 1000 obs", "Fewer than 1000 obs", "Fewer than 1000 obs", "Fewer than 1000 obs", "> 60% Missing data", "> 60% Missing data", "> 60% Missing data", "Low voltage", "Humidity outliers", "Humidity outliers", "Temperature outliers", "Hamatop outliers", "Hamatop outliers"))
+
+nodes.remove.net <- data.frame(nodeid = c(3, 22, 78, 135, 144, 145, 196, 198, 122, 134, 135, 141, 145),
+                               reason = c("Fewer than 1000 obs", "Fewer than 1000 obs", "Fewer than 1000 obs", "Fewer than 1000 obs", "Fewer than 1000 obs", "Fewer than 1000 obs", "Fewer than 1000 obs", "Fewer than 1000 obs", ">60% Missing data", "High 1/voltage", "High 1/voltage", "High 1/voltage", "High 1/voltage"))
+
+log.rm <- filter(redwood.log, nodeid %in% unique(nodes.remove.log$nodeid))
+log.rm.table <- group_by(log.rm,nodeid) %>% 
+  summarize(n = n(), 
+            "NA" = round(100*sum(is.na(humidity))/n),
+            "humid" = round(100*sum(humidity <0,na.rm=TRUE)/n),
+            "temp" = round(100*sum(humid_temp <0,na.rm=TRUE)/n),
+            "hamatop" = round(100*sum(hamatop >120000,na.rm=TRUE))/n,
+            "voltage" = round(100*sum(voltage <2,na.rm=TRUE)/n))
+xtable(round(log.rm.table),digits=0, include.rownames=FALSE,caption="The first column provides the node IDs of each node which is removed from the log dataset. The remaining columns display the number of observations, the proportion of NA values in the dataset, the proportion of erroneous or outlying humidity, temperature, hamatop and voltage readings respectively for each node",header="Data logger", align = "ll|llllll")
+
+
+@
+
+\noindent Since the study was designed such that one measurement was taken every 5 minutes, one would expect to see approximately 12,000 time stamps. In the log dataset, however, the \texttt{result\_time} variable contained only one date (14:25:00, November 10th, 2004), repeated for each observation. Fortunately, an external file containing the correct \texttt{epoch} and \texttt{result\_time} combinations was available and was incorporated into each dataset to reflect the correct measurement times.\\
+\noindent Next, the dataset contains a large amount of missing values. For the most part, the missingness comes from the fact that there are a huge number of node/time combinations missing from the dataset, but also that there are 8270 observations over three nodes in the log dataset with \texttt{NA} values reported for each of the measurements taken. Obviously the simplest thing to do in such a situation is to simply remove the missing value rows. However since more than 60\% of the observations made by these three nodes were \texttt{NA}, all observations from each of these nodes were removed. The reason being that having such a large amount of missing data implies that the node was not functioning correctly for a large portion of the study, and that the rest of the observations are potentially unreliable.\\
+
+
+
+
+% \noindent Interestingly, although the typical voltage values from the log dataset are between 2.4 and 3, for the network dataset, the values of the voltage variable have a median of \Sexpr{round(median(net$voltage))}, and instead of having a number of nodes with zero voltage, there are a number of nodes with extremely high voltage values of approximately 1,000. Although it is clear that the voltage readings from each dataset are on entirely different scales, some visual exploration reveals that there is an inverse relationship between the data logger voltage and the network voltage. That is
+% $$\text{data log voltage} = \frac{\alpha}{\text{network voltage}} +\beta$$
+% \noindent for some $\alpha, \beta \in \mathbb{R}$. Figure~\ref{fig:outlier} offers a closer look at how the nodes with the misbehaving voltage values are performing in terms of the other measurements.
+% 
+% 
+% It is clear that for the data obtained from the data logger, the nodes containing humidity and temperature outliers and some of the nodes containing the incident PAR outliers do correspond to nodes low voltage. However, there are also a number of normal humidity and temprature observations which are achieved by these low voltage nodes. It turns out that was node 29 which contained the overwhelming majority of the humidity, temperature and incident PAR outliers (in fact all of the observations from this node are outliers), and as such node 29 was removed from the dataset. The other 8 nodes, however, appear to erroneously display zero voltage, but are otherwise performing normally, and thus are not removed. Moreover, although there are a number of humidity observations which are larger than 100\%, they are not significantly higher and this was taken to be a result of a calibration error rather than significantly erroneous observations and so these values were left in the dataset. For the node (node 40) with outlying incident PAR values, but which does not have low voltage values, 60\% of the nodes values were outliers, but we notice that this node is one of those with fewer than 1000 observations (in fact this node has only 98 observations, and so was removed prior to analysis anyway.\\
+% \noindent Surprisingly, although the overall trends of the data are the same for both the data logger dataset, for the network data the patterns of outliers are completely different. Figure~\ref{fig:netoutlier} shows these patterns for the temperature and humidity variables (neither of the incident variables did displayed any significant outliers). For the humidity variable, there are a number of clearly erroneous readings achieveing values above 110\% and below 0\%, neither of which are realistic. Again, some of these erroneous readings correspond to strange voltage readings, but there are also a small number which do not. There are similarly a number of erroneous temperature observations which are above $50^o$C. In particular, there are several temperature readings of $122^o$C, which is clearly nonesense. Moreover, the timepoints at which humidity and temperature errors occur seem to be the same, and correspond to nodes 78, 123, 141 and 145. However, unlike for the nodes with erroneous readings in the log dataset, these nodes only have at most 16\% of their values falling into the erroneous category, with the exception of nodes 78 and 145, which have a higher percentage of faulty readings. However, both of these nodes contain fewer than 1000 observations and thus were removed prior to analysis anyway. Of the remaining nodes, rather than remove all measurements made by the ndoes, since the proportion of erroneous readings is quite low, only the erroneous readings were removed, and the remaining observations were kept.
+% 
+% <<netoutlier,message=FALSE,echo=FALSE,warning=FALSE,cache=TRUE,fig.height=2.5,fig.width=7,fig.cap="The performance of temperature and humidity over time in the network dataset">>=
+% set.seed(100)
+% # generate a random sample of size 10000
+% index <- sample(1:nrow(net),10000)
+% 
+% require(gridExtra) 
+% plot.humid <- ggplot(net.edit[index,]) + 
+%   geom_point(aes(x = epoch.days, y = humidity, col = outlier), alpha = 0.5) + 
+%   ggtitle("Humidity") + geom_hline(yintercept = 107, col="red", alpha = 0.5) + scale_colour_discrete(guide = FALSE) +ylab("% humidity") + xlab("time")+
+%   scale_x_datetime(breaks=date_breaks("6 days"),labels = date_format("%b %d")) +geom_hline(yintercept = 0, col="red", alpha = 0.5) 
+%                                    
+% plot.temp <- ggplot(net.edit[index,]) + 
+%   geom_point(aes(x = epoch.days, y = temp, col = outlier), alpha = 0.5) + ylab("degrees celcius") + xlab("time")+
+%   ggtitle("Temperature") + geom_hline(yintercept = 45, col="red", alpha = 0.5) + scale_colour_discrete(guide = FALSE) +
+%   scale_x_datetime(breaks=date_breaks("6 days"),labels = date_format("%b %d")) 
+% 
+% grid.arrange(plot.humid, plot.temp, ncol=2, 
+%              main = "Wireless network (with outlier cutoffs)")
+% 
+% @
+
+
+
+
+
+
+\subsection{Data Exploration}
+\noindent There are a number of differences between the two trees, the first being that they are slightly different heights. The interior tree contains nodes at heights ranging from 22.9 meters to 66.4 meters above ground level, whereas the edge tree contains nodes at heights ranging from 12.7 meters to 56.5 meters above ground level. Moreover, the bulk of the observations within the log dataset come from the interior tree and the edge tree only contains data for the first week of the study (Figure~\ref{fig:edgevsinterior}).
+
+<<finaldata,echo=FALSE,cache=TRUE>>=
+
+
+#### remove nodes and obs mentioned above
+
+# remove the NA rows
+log.new <- filter(redwood.log, !is.na(humidity))
+
+# remove the erroneous entries and the weird outliers
+log.rm <- group_by(log.new, nodeid) %>% 
+  summarize(n = n(),
+            "Less than 1000 obs" = n() < 1000, 
+            "% Humidity < 0" = round(100*sum(humidity<0)/n), 
+            "% Temperature < 0" = round(100*sum(humid_temp < 0)/n), 
+            "% Incident PAR > 120,000" = round(100*sum(hamatop > 120000)/n))
+
+to.remove.log <- log.rm[which(apply(log.rm[,-c(1,2)],1,sum) >0),]
+
+
+# Each of these nodes are to be removed -- not enough data for any
+log.new <- filter(log.new, !(nodeid %in% to.remove.log$nodeid))
+
+
+
+@
+
+
+
+<<edgeinterior,echo=FALSE,cache=TRUE>>=
+
+
+# Split the height into lower, middle, upper
+mote <- mutate(mote, height.interval = cut(height, breaks = c(10,47.5,57,67),
+                                           labels=c("lower","middle","upper")))
+mote$height.interval <- factor(mote$height.interval,
+                               levels <- c("upper","middle","lower"))
+
+
+
+
+
+
+# How many of the nodes are in the log dataset and vice versa?
+log.mote <- inner_join(log.new,mote,by="nodeid")
+
+  
+         
+# Add a column which has just the date but not the time
+# as well as a column which has the time and an arbitrary date
+log.mote <- mutate(log.mote, date = mdy(date))
+log.mote <- mutate(log.mote, time = hms(time))
+
+
+# separate interior tree and exterior tree
+log.interior <- filter(log.mote, tree=="interior")
+log.edge <- filter(log.mote, tree=="edge")
+
+
+@
+
+
+<<edgevsinterior,echo=FALSE,cache=TRUE,warning=FALSE,fig.cap="A Histogram showing the number of observations in the log dataset for the tree in the edge (green) of the forrest overlaid onto a histogram showing the number of observations for the tree at the interior (purple) of the forrest versus time">>=
+
+ggplot(log.interior) + 
+  geom_histogram(aes(date),col="white", alpha = 0.5, fill = "purple") +
+  xlab("time") + ylab("number of observations") + ggtitle("edge tree (green) and interior tree (purple)") +
+  theme(text = element_text(size=10)) +
+  geom_histogram(data = log.edge,aes(date),col="white", alpha = 0.5, fill = "green")
+# So at the end of April and the beginning of May, we have a large number of
+# observations from both trees. However, after May 4, the number of observations
+# from the edge tree drops to almost 0, while the number of observations for
+# the interior tree stays okay until around May 26, when we lose the rest
+
+
+@
+
+
+
+\noindent To get an initial impression of how the variables interact, Figure~\ref{fig:scatter}. presents a scatterplot of each of the variables from the interior tree. The corresponding scatterplot from the edge tree was extremely similar. There is a clear overall inverse relationship between humidity and temperature such that as humidity rises, temperature decreases (temperature and humidity have a correlation of -0.84). A closer look at the data (see Figure~\ref{fig:apr28may4} for an example) revealed that the troughs and peaks occurring in the temperature measurements precede the corresponding peaks and troughs occurring in the humidity measurements by approximately 2 hours. It is harder to specify a strict relationship between incident PAR and either humidity or temperature, other than lower values and less variation in the incident PAR values occured when temperature is low and humidity is high. As we will see below, this corresponds to the night hours, when there is typically no incident PAR detected (as there is no sunlight) and the temperature drops. The large majority of the incident PAR measurements were very low.
+
+
+
+
+<<scatter,echo=FALSE,echo=FALSE,cache=TRUE,fig.cap="Paired scatterplots for a subset of the temperature, humidity and incident PAR (hamatop) measurements from the interior tree",fig.width=11.5,fig.height=5>>=
+ 
+library(GGally)
+index <- sample(1:nrow(log.interior),1000)
+ggpairs(select(log.interior[index,],humidity,humid_temp, hamatop))
+
+
+@
+
+
+\section{Graphical Critique}
+%Critique the plots in Figures 3 and 4. What questions did they try to answer? Did they answer them successfully? Did they raise nay questions not addressed in the text? Would you change them at all?
+
+\noindent Tolle \emph{et al.} view the data as consisting of three primary dimensions: time $\times$ height $\times$ value. However, the authors acknowledge that visually, it is not an easy task to make inferences by looking at everything at once. Thus, quite sensibly, they decide to split the dimensions in several ways. The first is by looking at the one-dimensional value (e.g. temperature, humidity, PAR) alone via histograms. The next is to use boxplots to analyse the two-dimensional time $\times$ value and height $\times$ value combinations in order to examine how the measurements change over height and time separately.\\
+\noindent In Tolle \emph{et al.}'s Figure 3(a), the authors aim to identify what type of distribution each variable follows. In terms of temperature and humidity, the histograms offer clear visualizations of the overall distributions. However for the PAR histograms, the figures are so dominated by the vast percentage of values at 0 that it is impossible to get a clear picture of the remaining values. The authors may have been better served by considering a log-scale for the PAR values obtained.\\
+\noindent Overall, these histograms serve only to get a feel for the range of values attained for each variable, which could be presented just as clearly in Tolle \emph{et al.}'s Figure 3(b) which displays the variation in each measurement over time in the form of boxplots. As intended, for temperature and humidity, these figures display the range and change in values observed over time. However, it would be much clearer if a line of best fit were added to the plot making the overall trends visually clearer. Further, unlike in Figure 3 in this report, these histograms do not give an idea of how many observations are made on each day. In particular, it is not clear that after May 26th, the number of observations decreases significantly. Again the PAR figures present much of the same information as they did in Tolle \emph{et al.}'s Figure 3 (a).\\
+\noindent For Tolle \emph{et al.}'s Figure 3(c), the boxplots are stacked vertically, presumably to visually represent tree height. Although these boxplots do provide a visualization of the changes for each variable over height, they are somewhat cluttered and do not allow for eyeballing of any particular trend. Especially as these values are taken from the entire study rather than for any particular day, most of the interesting trends get lost since each day is so variable. Comparing Tolle \emph{et al.}'s Figure 3(c) to Figure~\ref{fig:boxheight} in this report, it is much easier to see any interesting trends in Figure~\ref{fig:boxheight} as we are looking at directly comparable measurements rather than ``averaging out'' over the entire study.\\
+\noindent Figure 3(d) in Tolle \emph{et al.} attempts to show variability after centering (by removing the effect of the mean). Unlike in the previous panels, here the temperature and humidity plots are visually uninformative, but for the PAR panels, the relationship between PAR and height is presented in a much clearer manner. From this plot it is fairly clear that the lower segment of the tree receives much less light than does the upper segment of the tree. Perhaps the authors could have removed part (a) and combined part (c) and (d) by taking the temperature and humidity panels from part (c) and the PAR panels from part (d) in order to present the same information in a more concise manner.\\
+\noindent Figure 4 in Tolle \emph{et al.}, on the other hand, contrasts with Figure 3 in Tolle \emph{et al.} in that it considers changes in only one day in the study (May 1st). Unlike in Figure 3 where it was difficult to pick out any clear relationship between the variables, this figure makes it much easier to identify how the variables interact with one another. The left-hand panels represent each individual sensor as a colored line, which while it looks somewhat messy, does allow for direct comparison between temperature and humidity, for example as the red sensor reaches a temperature peak, it also reaches a humidity trough. However the majority of the other sensors are lost in the jumble of colored lines. \\
+\noindent The panels on the right-hand side of Figure 4  combine height, value and direction by selecting the points to be triangles whose direction represents the direction of the node. However, since this figure considers only a single time-point, it is unclear as to whether the trend presented is an accurate description of all of the data or simply something that occurred by chance. In other words, the figure does not capture any of the variability of the trends presented, and may present an extremely biased view of the relationship between height and the other variables. These figures raise the question of whether these trends presented are representative in general to the tree or only representative to May 1st at 9:35 AM. Unfortunately, this question is not addressed in the paper.
+
+
+
+\section{Findings}
+Below we will describe three of the primary findings made primarily from graphical analysis of the dataset. The first finding presented is the variation in the relationship between temperature and humidity over time. The second finding describes an anomaly in the data occurring in late April for the forest edge tree which indicates a possible fog cloud that descended onto the forest edge, but left the forest interior unaffected. The final finding describes how the temperature, humidity and incident PAR varies over different heights of the tree.
+
+
+
+
+\subsection{Temperature versus Humidity}
+
+
+
+
+
+\noindent Although Figure~\ref{fig:scatter}. presented an overall relationship between temperature and humidity, the story is a bit different if we take into account the time of day. Figure~\ref{fig:temphumtime}. displays humidity versus temperature over four consecutive days and displays the time of day through coloring (dark points correspond to nighttime and light points correspond to daytime). During daylight hours, the relationship between temperature and humidity was significantly more linear than during the night hours. It appears to be the daylight hours which drive the overall trend observed in Figure~\ref{fig:scatter}. During the night hours, each plot contains two distinct temperature-humidity clusters, corresponding to early morning and late night (note that it is expected that these two clusters would arise since they are separated by the daylight hours). Although the night clusters still often display this inverse relationship between temperature and humidity, this trend is not nearly as steep nor as linear as during the day. For example, although the temperature decreases as humidity increases during the day on May 2nd, at night, the temperature remains fairly constant around $20^o$C even with changes in humidity. It is clear that the overall trend is for the night to be cooler and less humid than the daytime.
+
+<<temphumtime, echo=FALSE,cache=TRUE,warning=FALSE,fig.cap="Temperature versus humidity for the interior tree on each of April 30th, May 1st, 2nd and 3rd. The points are colored based on the time of day, and intended to reflect the color of the sky. A black point corresponds to midnight, while a sky blue point corresponds to noon. There is a continuous color scale for all times in-between.",fig.height=4>>=
+midday <- as.integer(ymd_hms("2012-01-01 12:00:00"))
+index <- sample(1:nrow(log.interior),50000)
+log.new <- filter(log.interior[index,], date >= as.Date("2004-04-30",tz=8), date <= as.Date("2004-05-03",tz=8))
+ggplot(log.new) +
+  geom_point(aes(x = humidity, y = humid_temp, col = abs(midday - (as.integer(time)))),alpha=0.4) +
+  xlab("humidity") + ylab("temperature") +
+  facet_wrap(~ date, ncol = 2) +
+  scale_color_gradient(low = "skyblue",high = "black") +
+  theme(legend.position = "none")
+@
+
+\newpage
+\subsection{Late April Fog}
+
+
+
+
+
+<<apr28may4,echo=FALSE,warning=FALSE,cache=TRUE,fig.cap="Temperature, humidity and incident PAR (hamatop) over time on April 28th for which the two trees appear to experience very different environments and on May 4th when the two trees experience a very similar environment.",fig.width=10,fig.height=12.2>>=
+index <- sample(1:nrow(log.mote),50000)
+ggtemp <- log.mote[index,] %>% 
+  filter(date == ymd("2004-04-28") | date == ymd("2004-05-04")) %>%
+  distinct(date, time, humid_temp, tree) %>%
+  ggplot() + 
+  geom_point(aes(x = as.numeric(hms(time)), y = humid_temp, col = tree), alpha=0.4) + stat_smooth(aes(x = as.numeric(hms(time)), y = humid_temp, col = tree), span=0.9, size=2, se = F) +
+  xlab("time") + ylab("temperature") +
+  facet_wrap(~ date, ncol=2)
+ggtemp
+
+
+gghumid <- ggplot(filter(log.mote[index,], 
+              (date >= as.Date("2004-04-28",tz=8) & date <= as.Date("2004-04-28",tz=8)) | 
+                (date >= as.Date("2004-05-04",tz=8) & date <= as.Date("2004-05-04",tz=8))) , 
+       aes(x = as.numeric(time), y = humidity, col = tree)) + 
+  geom_point(alpha=0.4) + stat_smooth(span=0.9, size=2, se = F) +
+  xlab("time") + ylab("humidity") +
+  facet_wrap(~ date,ncol=2)
+
+
+
+dat <- filter(log.mote[index,], 
+              (date >= as.Date("2004-04-28",tz=8) & date <= as.Date("2004-04-28",tz=8)) | 
+                (date >= as.Date("2004-05-04",tz=8) & date <= as.Date("2004-05-04",tz=8)))
+gghama <- ggplot(dat , 
+       aes(x = as.numeric(time), y = hamatop, col = tree)) + 
+  geom_point(alpha=0.4) + stat_smooth(span=0.9, size=2, se = F) +
+  xlab("time") + ylab("hamatop") +
+  facet_wrap(~ date,ncol=2)
+
+
+grid.arrange(ggtemp, gghumid, gghama,ncol=1)
+
+
+
+@
+
+
+\noindent Comparing the edge and interior trees on April 28th-29th, one would get the impression that the two trees experience wildly different conditions (first column of Figure~\ref{fig:apr28may4}). April 28th begins with a steep drop in temperature in the environment surrounding the edge tree, accompanied by a corresponding increase in humidity. Meanwhile, the interior tree experiences the inverse: a slight increase in temperature and a decrease in humidity. Around 7AM the temperature around the interior tree begins to decrease, reaching a minimum at 10AM after which the temperature rises to a maximum at 4PM. Following this, the temperature gradually decreases as night falls. Very different behavior is observed for the edge tree during this time. In between 8AM and 1PM, the temperature around the edge tree sharply increases after which it decreases to a local minimum at 4PM and increases again to the maximum at 7PM before decreasing steadily as the turbulence of April 28th comes to a close. Having described the temperature variations over the course of the day, one can infer the humidity variations, or better yet, one can look at Figure~\ref{fig:apr28may4} and see for themselves the same (though inverted) patterns made for the edge and interior tree.\\
+\noindent As interesting as these vastly different humidity and temperature observations are, viewing the incident PAR values over those two days reveals that the sensors from the edge tree are detecting PAR levels of zero throughout the entire day, whereas the sensors from the interior tree are detecting regular PAR levels. Although it is certainly possible that these readings are simply the sensors misbehaving, one possible explanation for this observed phenomenon is that a dense fog descended onto the edge of the forest where the edge tree lives (resulting in the PAR levels detected being negligible and the increase in humidity) while the interior tree was deep enough inside the forest to be unaffected by the fog.\\
+\noindent Although this section has discussed in length the strange weather behavior of April 28th and 29th, it turns out that on all other days for which data is available from both trees, the two trees experienced strikingly similar temperature, humidity and PAR trends to one another (although it can vary significantly from day to day). The edge tree, however, consistently appears to experience a slightly cooler and more humid environment during the day than does the interior tree (see the second column of Figure~\ref{fig:apr28may4}).
+
+
+
+
+\subsection{The Effect of Height}
+
+
+<<boxheight,echo=FALSE,warning=FALSE,cache=TRUE,fig.cap="Boxplots displaying the temperature, humidity and log(incident PAR) on April 30th and May 2nd for the interior tree at the lower, middle and upper regions of the tree",fig.height=8>>=
+
+
+index <- sample(1:nrow(log.interior),50000)
+dat <- filter(log.interior[index,], (date >= as.Date("2004-04-30",tz=8) & date <= as.Date("2004-04-30",tz=8)) | (date <= as.Date("2004-05-02",tz=8)) & date >= as.Date("2004-05-02",tz=8))
+
+temp_height <- ggplot(dat,aes(x = height, y = humid_temp, fill = height.interval)) + 
+  geom_boxplot(alpha=0.4) + xlab("height (m)") + ylab("temperature") +
+  facet_wrap(~ date,ncol=2)
+
+
+
+
+index <- sample(1:nrow(log.interior),50000)
+humidity_height <- ggplot(dat, 
+       aes(x = height, y = humidity, fill = height.interval)) + 
+  geom_boxplot(alpha=0.4) + xlab("height (m)") + ylab("humidity") +
+  facet_wrap(~ date,ncol=2)
+
+
+
+
+
+index <- sample(1:nrow(log.interior),50000)
+hamatop_height <- ggplot(dat , 
+       aes(x = height, y = log(hamatop), fill = height.interval)) + 
+  geom_boxplot(alpha=0.4) + xlab("height (m)") + ylab("log(hamatop)") +
+  facet_wrap(~ date,ncol=2)
+
+
+
+
+grid.arrange(temp_height, humidity_height, hamatop_height, ncol=1)
+
+
+
+
+@
+
+Figure~\ref{fig:boxheight} shows how temperature, humidity and incident PAR varied for three different height regions of the interior forest tree on April 30th and two days later on May 2nd. Interestingly, on the cooler day (April 30th), the the upper region of the tree experienced temperatures of a few degrees warmer and slightly lower humidity than the lower region of the tree, while on May 2nd, which was significantly warmer, there was little difference between the temperature and humidity of the upper, middle and lower regions of the tree. Further, the lower and middle regions of the tree were exposed to slightly more sunlight on the cooler day, while the upper region of the tree was exposed to more sunlight on the warmer day. As expected, on both days the amount of sunlight detected by the sensors increased significantly the higher up the tree the sensor was located.
+
+
+\section{Discussion}
+%Did the data size restrict you in any way? Discuss a new aspect of large data sets from the lab.
+Although the dataset provided was fairly large, it was not so large that visualization was made impossible. Rather, there were a number of logistical factors that made analysis challenging for this particular data set. For example, there was a lot of ambiguity about what several of the variables represented (for example, it was not clear that the tree variable represented two different trees). There was also a large amount of missing values and erroneous data entries, which were not necessarily obvious from looking only at summary statistics. Further, the two data sources (the network and the data logger) were inconsistent with one another, for example, in terms of the measurements units used.\\
+\noindent Overall, it seems that in terms of large datasets, it is much more useful to use informative graphics to understand and explore the dataset than it is to look at numbers such as summary statistics.
+
+
+\section{Conclusion}
+In this report, an analysis of the climate of two redwood trees from Sonoma, California was performed. The data contained a large amount of inconsistencies, incorrect entries, missing values and outliers and the corresponding data cleaning process was described in detail. Following data cleaning, visual analysis lead to several interesting findings including 1) that the relationship between temperature and humidity depended on the time of day, 2) that strange conditions in late April potentially indicates heavy fog surrounding the edge of the forest, and 3) that it is slightly cooler and more humid around the lower region of the tree than the upper region of the tree, but this difference is more extreme on cooler days.
+
+
+\newpage
+\bibliography{Lab1}
+\end{document}
