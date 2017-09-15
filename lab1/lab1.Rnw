@@ -68,14 +68,14 @@ table(redwood_log_orig$nodeid) # Find an erroneous node? 65535 is not a real nod
 \section{Introduction}
 
 In this report we will investigate the data cleaning and analysis methodologies undertaken by Tolle et. al. in their study of climate dynamics as experienced by a California coastal redwood.\\\\
-The data is passed without any explanation as to the variables or their collection
-methodologies except for those that are specified in the paper, which we will see
-imply questions of both collection and interpretation.  The redwood sensors (or ``motes'')
+The data is recieved without any explanation as to the variables or their collection
+methodologies except for those that are specified in the paper, and
+imply questions surrounding their collection and interpretation.  The redwood sensors (or ``motes'')
 originally were intended to pass data to a central computer via wireless network.  It was
 later determined that the wireless data collection system was faulty or defective, and
 so as a result, digital logs stored on flash memory chips within the sensors themselves 
-proved to be the most reliable source of data according to the collaborators.  We attempted
-to investigate this claim before proceeding with the log-based data set.\\
+proved to be the most reliable source of data according to the collaborators.  Both the 
+networked collected and log collected data sets were made avalible.
 
 \section{The Data}
 
@@ -94,14 +94,13 @@ The sensors were built with the following sensors, though the significant ones a
 
 \subsection{Data Cleaning}
 
-Since the redwood data set was collected from two sources (the network and the backup data logs stored in the sensors), the ``all'' data might be redundant.  In order to look at the .  Voltage transform?  Units transform?
-
-Voltage seems to be used as a proxy.
+Since the redwood data set was collected from two sources (the network and the backup data logs stored in the sensors), the concatenated data set might be redundant. We attempted to check the consistency of the
+two constituient data sets before blindly proceeding with the log based data set as the authors suggested.
 
 \begin{enumerate}
-\item The authors of the paper suggest that the log data set will be more completed 
-and therefore useful than the network data set.  But rather than blindly accept this,
-we inner join the two and check to see that their values correlated correctly.  All measurements
+\item The authors of the paper suggest that the log data set will be more complete 
+and therefore useful than the network data set.  We inner join the two as data frames 
+and check to see that their values correlated correctly.  All measurements
 but voltage are well correlated.  Voltage comparisons between the two are problematic.
 This will flag voltage as an important variable to consider in the data cleaning.
 
@@ -117,6 +116,9 @@ This will flag voltage as an important variable to consider in the data cleaning
 \end{tabular}
 \end{center}
 
+Because the log data set is more complete, and the mutual entries appear to be mostly consistent,
+we proceed with using the log data set.
+
 \item We notice a bulk of the voltage exist at exactly 0.580567 V (26040 entries), which is probably a default value set by the firmware.  With such a large volume of the 
 observations corresponding to this value, we leave them in for later investigation (this 
 will form the basis of our first observation).
@@ -127,11 +129,13 @@ and the local time in UTC.  We then convert the UTC to Pacific Time so we can ha
 intuitive understanding of daylight.
 \item We remove extreme outlines from the data set for temperature and humidity.  For
 our criteria, we allow values slightly outside physical reality (slightly less than 0\%
-and slightly more than 100\%).  But we remove humidities of less than -100\% or more than 200\%.
+and slightly more than 100\%, since this is within the error of the instrument).
+But we remove humidities of less than -100\% or more than 200\%.
 We also remove temperatures of less than -10 C (since there is a large, discontinuous cluster at 
 -38.4 C, and this value is simply nonsensical given the local climate).
 \item Finally, we selection just the nodes that correspond to the interior tree (there are two 
-trees in the data set), since the paper only seemed to analyze the interior tree.
+trees in the data set), since the paper only seemed to analyze the interior tree, as well as nodes
+that fall within the 0 - 200 node id range (there was one node with an invalid ID).
 \end{enumerate}
 
 <<load-data, echo = FALSE, message = FALSE, warning = FALSE, cache = FALSE, results='hide', fig.width=6, fig.asp=1, fig.align='center'>>=
@@ -184,14 +188,12 @@ interior.selection <- clean.dates.log[clean.dates.log$Tree == "interior",] # Sel
 
 \subsection{Figure 3}
 
-\subsubsection{a}
-
 This figure has several issues.  I found the first set of histograms to be relatively
 useful, especially with respect to troubleshooting my own analyses.\\\\
 The temperature and relative humidity are reasonably cogent.  The incident PAR and 
 reflected PAR graphs though have very little value, given that they show
 what seems to be a constant daily trend.  If there is any other trend it is
-incredibly difficult to ascertain.\\\
+incredibly difficult to ascertain.\\\\
 Given the distributions shown in part (d) of this figure, these seem fairly redundant.
 The boundary between the upper quartile and the outliers are very faint, almost to the
 point of illegibility in the case of the incident PAR and reflected PAR.  It may have
@@ -206,12 +208,11 @@ an average trajectory with a standard deviation, and min/max lines.  This would
 allow for the appreciation of the variance of the measurements at any given point
 in time, while making the figure feel less cluttered.  The summary figures seem fine,
 except for the Reflected PAR graph which is very hard to read and whose mostly empty
-plot seems a waste of space.  There coloring of the motes (blue/pink) is never explained
-either.
+plot seems a waste of space.  There coloring of the motes points (blue/pink) is never explained.
 
 \section{Findings}
 
-To restrict our analysis we pick April 30th (one day before the author's chosen day)
+To restrict our analysis we pick April 30th (one day before the authors' chosen day)
 in order to select a day early in the experiment, where a large number of intact/productive
 mote recordings can be found, and to show some different conclusions from those drawn
 by figure 3 and figure 4.
@@ -221,15 +222,15 @@ by figure 3 and figure 4.
 When we cleaned our data set we assumed that the large spike in voltage
 at about .58 corresponded to a systematic failure of the voltage analysis
 but we will now rigorously investigate that claim.  Let us take two of the most
-bounded measurements -- temperature and humidity, and analyze them pairwise 
+ temperature and humidity, and analyze them in a pairwise graph
 colored by the voltage of their relative mote.  Here we see that the measurements
 at low voltages are well blended with the measurements at the higher voltages.
 Indeed, we see no relative difference in the patterns, which we have plotted at 
 a low alpha value so as not to obscure the general trend.  This graph can add
 support to our revised data cleaning practice of including measurements from 
-sensors that register with a voltage of lower than 2 V (or even 1 V) for the values
-of humidity and temperature.  But what about for the other units were are interested in?
-How would this analysis fare for questions of light flux?
+sensors that register with a voltage of lower than 2 V (or even 1 V) to add a large number
+of humidity and temperature readings.  But what about for the other units were are interested in?
+How would low voltage affect light flux at the top and bottom of the mote?
 
 
 <<q1p1, echo = FALSE, message = FALSE, warning = FALSE, cache = FALSE, fig.height = 3, fig.align='center'>>=
@@ -250,9 +251,10 @@ p
 @
 
 As opposed to the humidity and temperature readings, the mote voltage does seem to
-be prohibitive for understanding photometer readings.  We could hypothesized that 
-this could be for many reasons (perhaps the photometer elements in the motes are
-more power intensive than the humidity or temperature sensor).  Regardless, we should
+be prohibitive for understanding photometer readings.  The low voltage motes are much
+less senstive to PAR sunlight than the adequatley charged nodes.  We could hypothesize that 
+this could be because the photometer elements in the motes are
+more power intensive than the humidity or temperature sensor.  Regardless, we should
 be skeptical of our light readings from motes with low battery voltage.
 
 <<q1p2, echo = FALSE, message = FALSE, warning = FALSE, cache = FALSE, fig.height = 3, fig.align='center'>>=
@@ -271,7 +273,7 @@ p
 
 Again, given that we are working with the data without any correspondence
 with the authors of the paper, we hope to recapitulate basic physical principles 
-as a check on our data clarity and cleaning principles.  Here we examine basic meteorological relationships.\\\\
+as a check on our data clarity and cleaning principles.  Here we examine basic meteorological relationships on April 30th.\\\\
 Basic chemical and physical principles tell us that warmer air can bind more
 water than cooler air (this is one reason for the ''haze'' seen in cities on muggy days).
 So, assuming a constant volume of water, an increase in temperature usually
@@ -285,6 +287,7 @@ Apr.30.selection <- interior.selection[grepl("2004-04-30", interior.selection$da
 Apr.30.selection.node <- Apr.30.selection[Apr.30.selection$nodeid == 197,]
 
 # Citation: https://rpubs.com/MarkusLoew/226759
+# This how I learned how to do a plot with different y-axis values.
 
 p <- ggplot(Apr.30.selection.node, aes(x = datetime))
   p <- p + geom_line(aes(y = humid_temp, colour = "Temperature (C)"))
@@ -300,8 +303,8 @@ p <- ggplot(Apr.30.selection.node, aes(x = datetime))
 p
 @
 
-So when the authors seem to suggest that on May 1st the tree experienced a micro climate
-that didn't obey conventional wisdom, I became suspicious and re-plotted it with my expanded
+So when the authors seem to suggest that on May 1st the tree experienced a microclimate that
+didn't obey conventional wisdom around humididty/temperature relationships, I became suspicious and re-plotted it with my expanded
 data set that included the lower voltage motes (given that I suspect their climate data is
 fine to use for the analysis for reasons stated above).  Indeed, the conventional relationship
 between humidity and temperature as a function of time seems to be re-established.  I believe
@@ -331,8 +334,8 @@ p <- ggplot(May.01.selection.node, aes(x = datetime))
 p
 @
 
-As an aside, with these two bits of information, we can calculate the dew point at
-each sensor for the day, if we care to.
+As an aside, with these two trajectories of information, we could calculate the dew point at
+each sensor for the day, if we cared to.
 
 \subsection{Third finding}
 
@@ -402,17 +405,22 @@ p <- p + ggtitle("Temperature vs. Incoming Sunlight on April 30th")
 p
 @
 
+As we might expect, increased height and sunlight exposure correspond to higher temperatures.
 
 \section{Discussion}
 
 The data size was not challenging computationally, but it was necessary to subset the data by
-day in order to show the trends and analyses clearly.  Further work could be done representing the 
+days in order to show the trends and analyses clearly.  Further work could be done representing the 
 month's worth of data effectively all at once.
 
 \section{Conclusion}
 
-This lab offered an interesting and exciting opportunity to see how different data cleaning 
-methodologies alter the resulting conclusions.
+This lab offered an opportunity to see how different data cleaning 
+methodologies alter the conclusions of an experiment.  It allows showed how 
+choices of which data to use can vary between question to question of the 
+data set.  Through the redwood meteorlogical and sunlight information, we 
+are able to establish interesting physical relationships that resonate well
+with our understanding of basic physical and biological principles.
 
 \section{Acknowledgements}
 

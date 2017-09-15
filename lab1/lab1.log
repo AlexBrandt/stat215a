@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.17 (TeX Live 2016) (preloaded format=pdflatex 2016.5.22)  14 SEP 2017 16:55
+This is pdfTeX, Version 3.14159265-2.6-1.40.17 (TeX Live 2016) (preloaded format=pdflatex 2016.5.22)  14 SEP 2017 18:10
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -395,11 +395,6 @@ Underfull \hbox (badness 10000) in paragraph at lines 76--85
 
  []
 
-
-Underfull \hbox (badness 10000) in paragraph at lines 76--85
-
- []
-
 LaTeX Font Info:    Try loading font information for OMS+cmr on input line 91.
 (/usr/local/texlive/2016/texmf-dist/tex/latex/base/omscmr.fd
 File: omscmr.fd 2014/09/29 v2.5h Standard LaTeX font definitions
@@ -409,106 +404,110 @@ LaTeX Font Info:    Font shape `OMS/cmr/m/n' in size <10> not available
  [1
 
 {/usr/local/texlive/2016/texmf-var/fonts/map/pdftex/updmap/pdftex.map}]
-Package color Info: Redefining color shadecolor on input line 144.
+Package color Info: Redefining color shadecolor on input line 148.
 
-<figure/load-data-1.pdf, id=79, 433.62pt x 433.62pt>
+<figure/load-data-1.pdf, id=75, 433.62pt x 433.62pt>
 File: figure/load-data-1.pdf Graphic file (type pdf)
 
 <use figure/load-data-1.pdf>
-Package pdftex.def Info: figure/load-data-1.pdf used on input line 146.
+Package pdftex.def Info: figure/load-data-1.pdf used on input line 150.
 (pdftex.def)             Requested size: 433.61894pt x 433.63878pt.
  [2]
-Underfull \hbox (badness 10000) in paragraph at lines 162--173
+Underfull \hbox (badness 10000) in paragraph at lines 164--175
+
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 164--175
 
  []
 
 [3 <./figure/load-data-1.pdf>]
-Package color Info: Redefining color shadecolor on input line 209.
-
-<figure/q1p1-1.pdf, id=100, 505.89pt x 216.81pt>
+Package color Info: Redefining color shadecolor on input line 210.
+ <figure/q1p1-1.pdf, id=96, 505.89pt x 216.81pt>
 File: figure/q1p1-1.pdf Graphic file (type pdf)
- <use figure/q1p1-1.pdf>
-Package pdftex.def Info: figure/q1p1-1.pdf used on input line 211.
-(pdftex.def)             Requested size: 469.75502pt x 201.32684pt.
-Package color Info: Redefining color shadecolor on input line 226.
 
-<figure/q1p2-1.pdf, id=101, 505.89pt x 216.81pt>
+<use figure/q1p1-1.pdf>
+Package pdftex.def Info: figure/q1p1-1.pdf used on input line 212.
+(pdftex.def)             Requested size: 469.75502pt x 201.32684pt.
+Package color Info: Redefining color shadecolor on input line 228.
+ <figure/q1p2-1.pdf, id=97, 505.89pt x 216.81pt>
 File: figure/q1p2-1.pdf Graphic file (type pdf)
- <use figure/q1p2-1.pdf>
-Package pdftex.def Info: figure/q1p2-1.pdf used on input line 228.
+
+<use figure/q1p2-1.pdf>
+Package pdftex.def Info: figure/q1p2-1.pdf used on input line 230.
 (pdftex.def)             Requested size: 469.75502pt x 201.32684pt.
-
-[4 <./figure/q1p1-1.pdf>]
-Underfull \hbox (badness 10000) in paragraph at lines 238--247
-
- []
-
-
-Underfull \hbox (badness 10000) in paragraph at lines 238--247
+ [4 <./figure/q1p1-1.pdf>]
+Underfull \hbox (badness 10000) in paragraph at lines 240--249
 
  []
 
-Package color Info: Redefining color shadecolor on input line 249.
-<figure/q2-1.pdf, id=116, 505.89pt x 216.81pt>
+
+Underfull \hbox (badness 10000) in paragraph at lines 240--249
+
+ []
+
+Package color Info: Redefining color shadecolor on input line 251.
+<figure/q2-1.pdf, id=112, 505.89pt x 216.81pt>
 File: figure/q2-1.pdf Graphic file (type pdf)
  <use figure/q2-1.pdf>
-Package pdftex.def Info: figure/q2-1.pdf used on input line 251.
+Package pdftex.def Info: figure/q2-1.pdf used on input line 253.
 (pdftex.def)             Requested size: 469.75502pt x 201.32684pt.
 
-Underfull \hbox (badness 10000) in paragraph at lines 259--268
+Underfull \hbox (badness 10000) in paragraph at lines 261--270
 
  []
 
 [5 <./figure/q1p2-1.pdf> <./figure/q2-1.pdf>]
-Package color Info: Redefining color shadecolor on input line 270.
+Package color Info: Redefining color shadecolor on input line 272.
 
-<figure/q2_2-1.pdf, id=136, 505.89pt x 216.81pt>
+<figure/q2_2-1.pdf, id=132, 505.89pt x 216.81pt>
 File: figure/q2_2-1.pdf Graphic file (type pdf)
  <use figure/q2_2-1.pdf>
-Package pdftex.def Info: figure/q2_2-1.pdf used on input line 272.
+Package pdftex.def Info: figure/q2_2-1.pdf used on input line 274.
 (pdftex.def)             Requested size: 469.75502pt x 201.32684pt.
 
-Underfull \hbox (badness 10000) in paragraph at lines 285--294
+Underfull \hbox (badness 10000) in paragraph at lines 287--296
 
  []
 
-<plot3.png, id=137, 538.51187pt x 484.30937pt>
+<plot3.png, id=133, 538.51187pt x 484.30937pt>
 File: plot3.png Graphic file (type png)
  <use plot3.png>
-Package pdftex.def Info: plot3.png used on input line 296.
+Package pdftex.def Info: plot3.png used on input line 298.
 (pdftex.def)             Requested size: 403.8829pt x 363.23112pt.
  [6 <./figure/q2_2-1.pdf>]
-Package color Info: Redefining color shadecolor on input line 300.
- <figure/q3-1.pdf, id=148, 505.89pt x 216.81pt>
+Package color Info: Redefining color shadecolor on input line 302.
+ <figure/q3-1.pdf, id=144, 505.89pt x 216.81pt>
 File: figure/q3-1.pdf Graphic file (type pdf)
  <use figure/q3-1.pdf>
-Package pdftex.def Info: figure/q3-1.pdf used on input line 301.
+Package pdftex.def Info: figure/q3-1.pdf used on input line 303.
 (pdftex.def)             Requested size: 469.75502pt x 201.32684pt.
 
-<figure/q3-2.pdf, id=149, 505.89pt x 216.81pt>
+<figure/q3-2.pdf, id=145, 505.89pt x 216.81pt>
 File: figure/q3-2.pdf Graphic file (type pdf)
  <use figure/q3-2.pdf>
-Package pdftex.def Info: figure/q3-2.pdf used on input line 303.
+Package pdftex.def Info: figure/q3-2.pdf used on input line 305.
 (pdftex.def)             Requested size: 469.75502pt x 201.32684pt.
  [7 <./plot3.png> <./figure/q3-1.pdf>]
-Package atveryend Info: Empty hook `BeforeClearDocument' on input line 323.
+Package atveryend Info: Empty hook `BeforeClearDocument' on input line 330.
  [8 <./figure/q3-2.pdf>]
-Package atveryend Info: Empty hook `AfterLastShipout' on input line 323.
+Package atveryend Info: Empty hook `AfterLastShipout' on input line 330.
  (./lab1.aux)
-Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 323.
-Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 323.
+Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 330.
+Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 330.
 Package rerunfilecheck Info: File `lab1.out' has not changed.
-(rerunfilecheck)             Checksum: 2B8A5D1C8A043703AD728340F9969C54;886.
-Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 323.
+(rerunfilecheck)             Checksum: DD65E369BB24778F58905C140196B38C;825.
+Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 330.
  ) 
 Here is how much of TeX's memory you used:
- 6504 strings out of 493014
- 94325 string characters out of 6133351
- 189647 words of memory out of 5000000
- 9944 multiletter control sequences out of 15000+600000
+ 6502 strings out of 493014
+ 94285 string characters out of 6133351
+ 190644 words of memory out of 5000000
+ 9943 multiletter control sequences out of 15000+600000
  9376 words of font info for 34 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 29i,11n,43p,291b,392s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 29i,12n,43p,291b,392s stack positions out of 5000i,500n,10000p,200000b,80000s
 </usr/local/texlive/2016/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb
 ></usr/local/texlive/2016/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb>
 </usr/local/texlive/2016/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></
@@ -516,10 +515,10 @@ usr/local/texlive/2016/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></us
 r/local/texlive/2016/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr/
 local/texlive/2016/texmf-dist/fonts/type1/public/amsfonts/cm/cmsl10.pfb></usr/l
 ocal/texlive/2016/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb>
-Output written on lab1.pdf (8 pages, 848514 bytes).
+Output written on lab1.pdf (8 pages, 848824 bytes).
 PDF statistics:
- 203 PDF objects out of 1000 (max. 8388607)
- 166 compressed objects within 2 object streams
- 30 named destinations out of 1000 (max. 500000)
- 169 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 199 PDF objects out of 1000 (max. 8388607)
+ 162 compressed objects within 2 object streams
+ 29 named destinations out of 1000 (max. 500000)
+ 161 words of extra memory for PDF output out of 10000 (max. 10000000)
 
