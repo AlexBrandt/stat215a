@@ -1,0 +1,715 @@
+\documentclass{article}
+
+\usepackage{geometry}
+\geometry{verbose,tmargin=1in,bmargin=1in,lmargin=1in,rmargin=1in}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\setlength{\parskip}{\smallskipamount}
+\setlength{\parindent}{0pt}
+\usepackage{amsthm}
+\usepackage{amsmath}
+
+\begin{document}
+
+\title{Lab 2 - Linguistic Survey\\
+Stat 215A, Fall 2017}
+
+\author{SID: ****2167}
+
+\maketitle
+
+\section{Kernel Density Plots and Smoothing}
+
+\subsection{Density Plots}
+
+When attempting to fit the histogram of temperature values for the Redwood Experiment
+data, there are clear trade-offs between the kernel function shape and the bandwidth.
+For bandwidth that is too small, the combined distributions become noisy and perhaps
+over fit.  For bandwidth that is too large, the natural variance of the data is poorly explained.
+In the case of this data, \(bw = .1\) seems to work very well for explaining the data
+without over fitting.  Several shapes could be acceptable candidates, besides the square
+function, though there seems
+to be no obvious reason to stray from the default (Gaussian) option.\\
+
+<<Density, echo = FALSE, message = FALSE, warning = FALSE, cache = FALSE, quitely=TRUE, results='hide', fig.width=7, fig.height=5, fig.align='center'>>=
+library(tidyverse)
+library(forcats)
+library(lubridate)
+library(stringr)
+library(plotly)
+library(superheat)
+library(dplyr)
+library(ggpubr)
+library(png)
+library(lsr)
+library(maps)
+library(ggplot2)
+library(dplyr)
+library(reshape2)
+library(superheat)
+library(ggfortify)
+
+set.seed(123)
+
+# Load our state data for graphing purposes
+state_df <- map_data("state")
+
+setwd("~/Dropbox/STAT_215A/stat215a/lab2/")
+load("data/lab1_cleaned_data.RData")
+
+# Collect our motes temperature data for one time per day
+t.p <- interior.selection[interior.selection$epoch %% 288 == 144,]
+
+blank_theme <- theme_bw() +
+  theme(plot.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank()) 
+
+
+
+
+a <- ggplot(data = interior.selection, aes(humid_temp, y=..density..)) + 
+  geom_histogram(bins=50, alpha=.5) + 
+  # geom_density(aes(x=humid_temp, colour='red'), size=.5, bw=2, show.legend = FALSE) + 
+  stat_density(aes(x=humid_temp, colour='bw = 3'), size=.5, bw=3, 
+               geom='line', position='identity') +
+  stat_density(aes(x=humid_temp, colour='bw = 2'), size=.5, bw=2, 
+               geom='line', position='identity') + 
+  stat_density(aes(x=humid_temp, colour='bw = 1'), size=.5, bw=1, 
+               geom='line', position='identity') + 
+  stat_density(aes(x=humid_temp, colour='bw = .5'), size=.5, bw=.5, 
+               geom='line', position='identity') + 
+  stat_density(aes(x=humid_temp, colour='bw = .1'), size=.5, bw=.1, 
+               geom='line', position='identity') + 
+  ylab("Density") + xlab("Temperature (C)") + 
+  scale_colour_manual(values=c("bw = 3"="red", "bw = 2"="orange", "bw = 1"="yellow",
+                               "bw = .5"="blue", "bw = .1"="purple"), name="Bandwiths") + 
+ggtitle("Distribution of Temperature\n(Gaussian Kernel)") 
+
+b <- ggplot(data = interior.selection, aes(humid_temp, y=..density..)) + 
+  geom_histogram(bins=50, alpha=.5) + 
+  # geom_density(aes(x=humid_temp, colour='red'), size=.5, bw=2, show.legend = FALSE) + 
+  stat_density(aes(x=humid_temp, colour='bw = 3'), size=.5, bw=3, 
+               geom='line', position='identity', kernel = 'rectangular') +
+  stat_density(aes(x=humid_temp, colour='bw = 2'), size=.5, bw=2, 
+               geom='line', position='identity', kernel = 'rectangular') + 
+  stat_density(aes(x=humid_temp, colour='bw = 1'), size=.5, bw=1, 
+               geom='line', position='identity', kernel = 'rectangular') + 
+  stat_density(aes(x=humid_temp, colour='bw = .5'), size=.5, bw=.5, 
+               geom='line', position='identity', kernel = 'rectangular') + 
+  stat_density(aes(x=humid_temp, colour='bw = .1'), size=.5, bw=.1, 
+               geom='line', position='identity', kernel = 'rectangular') + 
+  ylab("Density") + xlab("Temperature (C)") + 
+  scale_colour_manual(values=c("bw = 3"="red", "bw = 2"="orange", "bw = 1"="yellow",
+                               "bw = .5"="blue", "bw = .1"="purple"), name="Bandwiths") + 
+ggtitle("Distribution of Temperature\n(Rectangular Kernel)") 
+
+
+c <- ggplot(data = interior.selection, aes(humid_temp, y=..density..)) + 
+  geom_histogram(bins=50, alpha=.5) + 
+  # geom_density(aes(x=humid_temp, colour='red'), size=.5, bw=2, show.legend = FALSE) + 
+  stat_density(aes(x=humid_temp, colour='bw = 3'), size=.5, bw=3, 
+               geom='line', position='identity', kernel = 'triangular') +
+  stat_density(aes(x=humid_temp, colour='bw = 2'), size=.5, bw=2, 
+               geom='line', position='identity', kernel = 'triangular') + 
+  stat_density(aes(x=humid_temp, colour='bw = 1'), size=.5, bw=1, 
+               geom='line', position='identity', kernel = 'triangular') + 
+  stat_density(aes(x=humid_temp, colour='bw = .5'), size=.5, bw=.5, 
+               geom='line', position='identity', kernel = 'triangular') + 
+  stat_density(aes(x=humid_temp, colour='bw = .1'), size=.5, bw=.1, 
+               geom='line', position='identity', kernel = 'triangular') + 
+  ylab("Density") + xlab("Temperature (C)") + 
+  scale_colour_manual(values=c("bw = 3"="red", "bw = 2"="orange", "bw = 1"="yellow",
+                               "bw = .5"="blue", "bw = .1"="purple"), name="Bandwiths") + 
+ggtitle("Distribution of Temperature\n(Triangular Kernel)") 
+
+d <- ggplot(data = interior.selection, aes(humid_temp, y=..density..)) + 
+  geom_histogram(bins=50, alpha=.5) + 
+  # geom_density(aes(x=humid_temp, colour='red'), size=.5, bw=2, show.legend = FALSE) + 
+  stat_density(aes(x=humid_temp, colour='bw = 3'), size=.5, bw=3, 
+               geom='line', position='identity', kernel = 'cosine') +
+  stat_density(aes(x=humid_temp, colour='bw = 2'), size=.5, bw=2, 
+               geom='line', position='identity', kernel = 'cosine') + 
+  stat_density(aes(x=humid_temp, colour='bw = 1'), size=.5, bw=1, 
+               geom='line', position='identity', kernel = 'cosine') + 
+  stat_density(aes(x=humid_temp, colour='bw = .5'), size=.5, bw=.5, 
+               geom='line', position='identity', kernel = 'cosine') + 
+  stat_density(aes(x=humid_temp, colour='bw = .1'), size=.5, bw=.1, 
+               geom='line', position='identity', kernel = 'cosine') + 
+  ylab("Density") + xlab("Temperature (C)") + 
+  scale_colour_manual(values=c("bw = 3"="red", "bw = 2"="orange", "bw = 1"="yellow",
+                               "bw = .5"="blue", "bw = .1"="purple"), name="Bandwiths") + 
+ggtitle("Distribution of Temperature\n(Cosine Kernel)") 
+
+ggarrange(a, b, c, d, 
+          labels = c("A", "B", "C", "D"),
+          ncol = 2, nrow = 2)
+@
+
+\subsection{Smoothing}
+
+Attempting to smooth the data with the loess module, we find that several
+options can be used to optimize the fit.  The 2nd degree polynomials and
+higher are not appropriate, as their standard error and general appearance 
+suggest.  The first degree polynomial fits quite well, and given a sufficiently
+well selected bandwidth (here, span\(= 5\)), the fit is better behaved.\\
+
+<<Smoothing, echo = FALSE, message = FALSE, warning = FALSE, cache = FALSE, quitely=TRUE, results='hide', fig.width=6, fig.height=6, fig.align='center'>>=
+a <- qplot(data = t.p, humid_temp, humidity)
+a <- a + geom_smooth(method = "loess", size = .5, span = .1, 
+                     formula = y ~ poly(x, 1)) + 
+  xlab("Temperature (C)") + ylab("Humidity (%)") +
+  ggtitle("Humidity vs. Temperature\n(Polynomial = 1, Span = .1)")
+
+b <- qplot(data = t.p, humid_temp, humidity) 
+b <- b + geom_smooth(method = "loess", size = .5, span = 5, 
+                     formula = y ~ poly(x, 1)) +
+  xlab("Temperature (C)") + ylab("Humidity (%)") +
+  ggtitle("Humidity vs. Temperature\n(Polynomial = 1, Span = 5)")
+
+c <- qplot(data = t.p, humid_temp, humidity)
+c <- c + geom_smooth(method = "loess", size = .5, span = .9, 
+                     formula = y ~ poly(x, 2),) +
+  xlab("Temperature (C)") + ylab("Humidity (%)") +
+  ggtitle("Humidity vs. Temperature\n(Polynomial = 2, Span = .9)")
+
+d <- qplot(data = t.p, humid_temp, humidity)
+d <- d + geom_smooth(method = "loess", size = .5, span = 5, 
+                     formula = y ~ poly(x, 2)) +
+  xlab("Temperature (C)") + ylab("Humidity (%)") +
+  ggtitle("Humidity vs. Temperature\n(Polynomial = 2, Span = 5)")
+
+ggarrange(a, b, c, d, 
+          labels = c("A", "B", "C", "D"),
+          ncol = 2, nrow = 2)
+@
+
+\section{Introduction}
+
+In this section we will analyze the data from a 2002 dialectic survey, focusing on 
+regional differences between speech and word patterns in the United States.  Our analysis
+will be focused on a subset of questions on pronunciation and word choice.
+
+\section{The Data}
+
+\subsection{Data quality and cleaning}
+
+Our data cleaning protocol is fairly straightforward.  Given that the linguistic location
+data (lingLocation.txt) is already cleaned by a previous member of the class, it falls to
+us to clean up the raw file (lingData.txt).  We notice there are a number of erroneous 
+state ID's.  We can clean those up by selecting only complete rows (rows without NA's), 
+and remove them from the factor list.  Our data is now ready for processing.  We will
+convert our (cleaned) categorical responses into a binary response table, but this will
+come in a later section.\\
+
+<<Cleaning, echo = FALSE, message = FALSE, warning = FALSE, cache = FALSE, quitely=TRUE, results='hide', fig.width=6, fig.height=6, fig.align='center'>>=
+
+
+# load the data
+ling_data <- read.table('data/lingData.txt', header = T)
+ling_location <- read.table('data/lingLocation.txt', header = T)
+# question_data contains three objects: quest.mat, quest.use, all.ans
+
+load("data/question_data.RData")
+state_df <- map_data("state")
+
+blank_theme <- theme_bw() +
+  theme(plot.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank()) 
+@
+
+\subsection{Exploratory Data Analysis}
+
+To begin, we take a general exploration approach in order to see which pairs of questions
+have the most relevance to one another.  More generally stated: some pairs of questions will
+probably have more similarity to one another than others.  What is the best way to compute
+this question to question interaction?  We remember that our data is nominal (i.e., categorical),
+so while various responses are coded as integers, these integers in and of themselves have no meaning.
+\\\\
+A good way to investigate categorical data is with Cramer's V.  Cramer's V is a variant of
+the chi-squared statistic that takes the form:
+\[V = \sqrt{\frac{\chi^2/n}{\text{min}(k-1,r-1)}}\]
+Where \(n\) is the number of observations, \(k\) is the number of columns in the data
+frame, and \(r\) is the number of rows.  Cramer's V is bounded from 0 to 1, and thus
+lends itself to a somewhat intuitive interpretation.  For reasons that will no be discussed here,
+it has the propensity towards over biasing associative claims.
+\\\\
+Here we will create a heat map of \(V(Q_i,Q_j)\) for all \(i, j\).  Then, using the superheat
+heat map package, we will do a simple hierarchical clustering of the results, so strongly 
+correlated questions will be grouped together.  For my investigation, this was presented
+as an interactive heat map, but for the purposes of creating a report that can be 
+efficiently recompiled, it will be represented as a static image, with the results from
+some of the highest Q/Q pairings reported below.  The Cramer's V value is reported
+for each pair as well.
+
+<<ExploratoryP1, echo = FALSE, message = FALSE, warning = FALSE, cache = FALSE, quitely=TRUE, results='hide', fig.width=6, fig.height=3, fig.align='center'>>=
+
+# Bad states are cleared out by the complete cases, though
+# we can still remove them from the factor list.
+ling_data <- ling_data[complete.cases(ling_data),]
+ling_data$STATE <- factor(ling_data$STATE)
+
+# Uncomment this line for faster running time!
+# ling_data <- ling_data[sample(nrow(ling_data), 10000),]
+
+# Select just the respones (no zip codes, etc.)
+just.responses <- ling_data[,grepl("Q", names(ling_data))]
+
+# Generate a blank frame to fill with Cramer's V for QQ matrix
+cvm <- as.data.frame(matrix(0.0, nrow = length(just.responses),
+       ncol = length(just.responses)))
+names(cvm) <- names(just.responses)
+row.names(cvm) <- names(just.responses)
+
+# Pairwise Cramer's V (only the upper triangle is calculated, 
+# then mirrored)
+for (i in seq(length(names(just.responses)))) {
+  for (j in seq(i, length(names(just.responses)))) {
+    if (i == j) {
+      cvm[i,j] <- NA
+    }
+    else {
+      my_table <- table(just.responses[,c(i,j)], exclude = "0")
+      my_cv <- cramersV(table(just.responses[,c(i,j)]))
+      cvm[i,j] <- my_cv
+      cvm[j,i] <- my_cv
+    }
+  }
+}
+
+c.cvm <- cvm
+c.cvm$QUESTION <- names(cvm)
+pairs <- melt(c.cvm)
+
+# Look for interesting pairs of questions, sorted by their 
+# Cramer's V
+head(pairs[order(pairs$value, decreasing = TRUE),], n=30)
+@
+
+<<ExploratoryP2, echo = FALSE, message = FALSE, warning = FALSE, cache = FALSE, quitely=TRUE, results='hide', fig.width=5.5, fig.height=6, fig.align='center'>>=
+
+# Plot a superheat heatmap
+superheat(cvm, left.label.text.size = 1,
+          left.label.size = .03,
+          bottom.label.text.size = 1,
+          bottom.label.size = .03,
+          scale=FALSE,
+          bottom.label.text.angle = 90,
+          title = "Cramer's V for Question/Question Pairings",
+          heat.lim = c(min(unlist(cvm), na.rm = TRUE),
+                       max(unlist(cvm), na.rm = TRUE)),
+          pretty.order.rows = TRUE,
+          pretty.order.cols = TRUE,
+          heat.na.col = 'white',
+          smooth.heat = TRUE
+          )
+@
+
+\subsubsection{Q54-Q55 (\(V = 0.65\))}
+
+We investigate the relationship between the acceptability of the following statements: ``He used
+to nap on the couch, but he sprawls out in that new lounge chair anymore'' (Q54) and ``I do exclusively
+figurative paintings anymore'' (Q55).  Both are examining the use of the ``positive anymore.'' Normally
+it is used in the negative context ``I don't eat like that anymore'' but here it is used both times
+in the positive sense.  It makes sense that this was the strongest of our correlative pairs, since
+the questions are interrogating very similar ideas.  From our table/heat map we see that most
+find both of these statements unacceptable.  Let's try to examine then, where both contexts of the
+positive anymore are acceptable.
+
+<<QQ21, echo = FALSE, message = FALSE, warning = FALSE, cache = FALSE, quitely=TRUE, results='hide', fig.width=3, fig.height=3, fig.align='center'>>=
+t <- table(just.responses[,c("Q055", "Q054")], 
+      exclude = "0")
+
+# Show the table of response counts for the question combinations
+superheat(t, left.label.text.size = 3,
+          left.label.size = .1,
+          bottom.label.text.size = 3,
+          bottom.label.size = .1,
+          scale=FALSE,
+          bottom.label.text.angle = 90,
+          title = "Q054 vs. Q055 responses (counts)",
+          heat.na.col = 'white',
+          X.text = t,
+          heat.col.scheme = "red",
+          title.size = 3,
+          legend=FALSE
+          )
+@
+
+<<QQ22, echo = FALSE, message = FALSE, warning = FALSE, cache = FALSE, quitely=TRUE, results='hide', fig.width=5.5, fig.asp=.5, fig.align='center'>>=
+x <- ling_data %>%
+  filter(long > -125) %>%
+  filter(Q054 == 1) %>%
+  ggplot() +
+  geom_point(aes(x = long, y = lat, color = factor(Q054)), 
+             size = 1, alpha = .5) +
+  geom_polygon(aes(x = long, y = lat, group = group),
+               data = state_df, colour = "black", fill = NA) +
+  blank_theme + 
+  ggtitle("Geographical Distribution of Those Finding Question 54\nUse of Positive Anyone Acceptable")
+
+ggsave("figure1.png", plot=x, dpi=400, width=4, height = 2.25, scale=2, unit="in")
+
+y <- ling_data %>%
+  filter(long > -125) %>%
+  filter(Q055 == 1) %>%
+  ggplot() +
+  geom_point(aes(x = long, y = lat, color = factor(Q055)), 
+             size = 1, alpha = .5) +
+  geom_polygon(aes(x = long, y = lat, group = group),
+               data = state_df, colour = "black", fill = NA) +
+  blank_theme + 
+  ggtitle("Geographical Distribution of Those Finding Question 55\nUse of Positive Anyone Acceptable")
+
+ggsave("figure2.png", plot=y, dpi=400, width=4, height = 2.25, scale=2, unit="in")
+@
+
+\begin{center}
+\includegraphics[width=5in,keepaspectratio]{figure1.png}
+\includegraphics[width=5in,keepaspectratio]{figure2.png}
+\end{center}
+
+We see the use of the ``positive anymore'' is mostly visible in the Midwest and
+Appalachia, which might fit with our intuition, as some theorize it brought the the United
+States by Irish immigrants (``Irish English Volume 2: The Republic of Ireland''),
+and these regions have traditionally house Irish immigrants and would allow for
+immigrants to  maintain their linguistic identity
+more than in large cities.
+
+\subsubsection{Q87-Q86 (\(V = 0.57\))}
+
+We then try to investigate a less significant association between ``Do you use the
+term ``bear claw'' for a kind of pastry? '' (Q87) and ``Do you use the word
+cruller?'' (Q86).
+
+<<QQ11, echo = FALSE, message = FALSE, warning = FALSE, cache = FALSE, quitely=TRUE, results='hide', fig.width=6, fig.height=3, fig.align='center'>>=
+t <- table(just.responses[,c("Q087", "Q086")], 
+      exclude = "0")
+
+superheat(t, left.label.text.size = 3,
+          left.label.size = .1,
+          bottom.label.text.size = 3,
+          bottom.label.size = .1,
+          scale=FALSE,
+          bottom.label.text.angle = 90,
+          title = "Q87 vs. Q86 responses (counts)",
+          heat.na.col = 'white',
+          X.text = t,
+          heat.col.scheme = "red",
+          title.size = 3,
+          legend=FALSE,
+          X.text.size=3
+          )
+@
+
+<<QQ1.2, echo = FALSE, message = FALSE, warning = FALSE, cache = FALSE, quitely=TRUE, results='hide', fig.width=5.5, fig.asp=.5, fig.align='center'>>=
+y <- ling_data %>%
+  filter(long > -125) %>%
+  filter(Q087 %in% c(1,2)) %>%
+  ggplot() +
+  geom_point(aes(x = long, y = lat, color = factor(Q087)), 
+             size = 1, alpha = .5) +
+  geom_polygon(aes(x = long, y = lat, group = group),
+               data = state_df, colour = "black", fill = NA) +
+  blank_theme + 
+  ggtitle("Geographical Distribution of Question 87 Responses") + 
+  scale_colour_manual(labels=c("Yes", "No"), values=c("Blue", "Red"), name="Bear Claw?")
+
+ggsave("figure3.png", plot=y, dpi=400, width=4, height = 2.25, scale=2, unit="in")
+
+y <- ling_data %>%
+  filter(long > -125) %>%
+  filter(Q086 %in% c(1,2)) %>%
+  ggplot() +
+  geom_point(aes(x = long, y = lat, color = factor(Q086)), 
+             size = 1, alpha = .5) +
+  geom_polygon(aes(x = long, y = lat, group = group),
+               data = state_df, colour = "black", fill = NA) +
+  blank_theme + 
+  ggtitle("Geographical Distribution of Question 86 Responses") + 
+  scale_colour_manual(labels=c("Yes", "No"), values=c("Blue", "Red"), name="Cruller?")
+
+
+ggsave("figure4.png", plot=y, dpi=400, width=4, height = 2.25, scale=2, unit="in")
+
+@
+
+\begin{center}
+\includegraphics[width=5in,keepaspectratio]{figure3.png}
+\includegraphics[width=5in,keepaspectratio]{figure4.png}
+\end{center}
+
+A cruller is a traditional type of New England pastry, whereas
+bear claw pastries are more traditionally found in the Western united states.
+We have limited our answer selection to those who know both types of
+pastries, but have usage preference, since they are in the majority.
+The cruller is indeed used more often as a word in New England, especially
+compare to the bear claw. The bear claw has more prevalence in the 
+Midwestern states when compared to the cruller.\\\\
+These findings confirm anecdotal evidence of word-of-mouth food history.
+
+\subsubsection{Investigating Language Directly}
+
+Rather than looking at question pairs, we can also explore the data with 
+direct geographical separation.  One such example is what people call sweetened
+carbonated beverages.  There were several options for this question, so we will
+restrict ourselves to three of the most common words: ``soda,'' ``coke,'' and ``pop.''
+
+<<QQ3, echo = FALSE, message = FALSE, warning = FALSE, cache = FALSE, quitely=TRUE, results='hide', fig.width=5.5, fig.asp=.5, fig.align='center'>>=
+
+colfunc<-colorRampPalette(c("yellow","blue"))
+
+y <- ling_data %>%
+  filter(long > -125) %>%
+  filter(Q105 %in% c(1,2,3)) %>%
+  ggplot() +
+  geom_point(aes(x = long, y = lat, color = factor(Q105)), 
+             size = 1, alpha = .5) +
+  geom_polygon(aes(x = long, y = lat, group = group),
+               data = state_df, colour = "black", fill = NA) +
+  blank_theme + 
+  ggtitle("Would you like a Soda, Coke, or Pop?") +
+  scale_color_manual(labels = all.ans[['105']]$ans[1:3], 
+                     values = colfunc(3))
+
+ggsave("figure5.png", plot=y, dpi=400, width=4, height = 2.25, scale=2, unit="in")
+@
+
+\begin{center}
+\includegraphics[width=5in,keepaspectratio]{figure5.png}
+\end{center}
+
+\section{Dimension reduction methods}
+
+From the outset we attempt to use k-means clustering in order to make sense of 
+the relationship between survey answers and geographical grouping.  The first question
+with k-means that one must address is how to set k (i.e., how many groups to decide).
+A fairly crude but useful metric is looking at the within clusters sum of squares for multiple
+values of k.  Often good choices for k can be found at the "elbow" or inflection of these
+graphs.  Please note that some of the code used to generate this diagnostic graph came
+directly from R-Bloggers website.  From our graph, we see that \(k=3\) or \(k=4\) would be
+an appropriate choice for our clustering algorithm.
+
+<<Adding, echo = FALSE, message = FALSE, warning = FALSE, cache = FALSE, quitely=TRUE, results='hide', fig.width=9, fig.height=5, fig.align='center'>>=
+
+copy.ling_data <- ling_data
+
+# Make the binary data frame
+
+append_question_prefix <- function(my_str, my_list) {
+  return(unlist(lapply(my_list, 
+                       FUN = function(i) paste(".", i, sep = ""))))
+}
+
+questions <- names(ling_data)[grepl("Q", names(copy.ling_data))]
+jq.c.ld <- copy.ling_data[,questions]
+jq.c.ld <- sapply(jq.c.ld, as.factor)
+for (quest in questions) {
+  jq.c.ld[,c(quest)] <- append_question_prefix(quest, jq.c.ld[,c(quest)])
+}
+
+binary_responses <- as.data.frame(model.matrix(~.+0,as.data.frame(jq.c.ld )))
+binary_responses[,c(grepl("\\.0", names(binary_responses)))] <- NULL
+
+# Just questions copy
+
+# citation: R bloggers
+k.max <- 6
+data <- jq.c.ld
+wss <- sapply(1:k.max, 
+              function(k) {
+                kmeans(data, k, nstart=50,iter.max = 15 )$tot.withinss
+                })
+
+plot(1:k.max, wss,
+     type="b", pch = 19, frame = FALSE, 
+     xlab="K Value",
+     ylab="W_c^2",
+     main="Choosing K for Clustering")
+@
+
+We then attempt to visualize this clustering initially by coloring a principle
+component axis plot by cluster.  While the PCA itself is fairly unremarkable in
+terms of explanatory power, it does seem to detect three distinct sub-parts of 
+the overall point mass.  It also shows that \(k = 4\) doesn't provide much more insight
+\(k = 3\) when it comes to explaining our data.\\
+
+<<PCA, echo = FALSE, message = FALSE, warning = FALSE, cache = FALSE, quitely=TRUE, results='hide', fig.width=7, fig.height=3, fig.align='center'>>=
+# Model using k means
+model3 <- kmeans(binary_responses, centers = 3, iter.max = 100, nstart = 10)
+model4 <- kmeans(binary_responses, centers = 4, iter.max = 100, nstart = 10)
+
+a <- autoplot(kmeans(binary_responses, centers = 3, iter.max = 100, nstart = 10), 
+         data = binary_responses) + ggtitle("Three Means Coloring and\nPCA for Binary Data")
+ 
+b <- autoplot(kmeans(binary_responses, centers = 4, iter.max = 100, nstart = 10), 
+         data = binary_responses) + ggtitle("Four Means Coloring and\nPCA for Binary Data")
+
+c <- ggarrange(a, b, 
+          labels = c("A", "B"),
+          ncol = 2, nrow = 1)
+
+ggsave("figure6.png", plot=c, dpi=400, width=4, height = 1.5, scale=2, unit="in")
+@
+
+\begin{center}
+\includegraphics[width=\textwidth]{figure6.png}
+\end{center}
+
+Finally we use our clustering to color our map of the continental United States.  The
+k-means derived groups seem to identify areas that fit with common intuition about
+regions dialectical differences: the Southern United States, the North Eastern United States,
+and the Midwestern/Western United States.  There are exceptions to these trends, especially 
+around major urban centers (which makes sense, given that they are often hubs for drastic
+geographic relocation).
+
+<<Results, echo = FALSE, message = FALSE, warning = FALSE, cache = FALSE, quitely=TRUE, results='hide', fig.width=6, fig.height=6, fig.align='center'>>=
+br.wloc <- binary_responses
+br.wloc[,c('lat', 'long')] <- ling_data[,c('lat', 'long')]
+br.wloc$my_clus3 <- model3$cluster
+br.wloc$my_clus4 <- model4$cluster
+
+a <- br.wloc %>% filter(long > -125) %>%
+ggplot() +
+  geom_point(aes(x = long, y = lat, color = factor(my_clus3)), 
+             size = 1) +
+  geom_polygon(aes(x = long, y = lat, group = group),
+               data = state_df, colour = "black", fill = NA) +
+  blank_theme
+
+b <- br.wloc %>% filter(long > -125) %>%
+ggplot() +
+  geom_point(aes(x = long, y = lat, color = factor(my_clus4)), 
+             size = 1) +
+  geom_polygon(aes(x = long, y = lat, group = group),
+               data = state_df, colour = "black", fill = NA) + 
+  blank_theme
+
+ggsave("figure7.png", plot=a, dpi=400, width=4, height = 2.25, scale=2, unit="in")
+ggsave("figure8.png", plot=b, dpi=400, width=4, height = 2.25, scale=2, unit="in")
+@
+
+\begin{center}
+\includegraphics[width=5in,keepaspectratio]{figure7.png}
+\includegraphics[width=5in,keepaspectratio]{figure8.png}
+\end{center}
+
+\section{Stability of findings to perturbation}
+
+In order to check that our findings are robust, we attempt to sub-sample, and then re-examine our PCA/clustering
+results to see if we can find similar conclusions.  We will randomly sample 10,000 data points twice, comparing
+their results against one another as well as the entire data set.\\
+
+<<PCAp2, echo = FALSE, message = FALSE, warning = FALSE, cache = FALSE, quitely=TRUE, results='hide', fig.width=7, fig.height=3, fig.align='center'>>==
+s1 <- sample(nrow(br.wloc), 10000)
+s2 <- sample(nrow(br.wloc), 10000)
+
+binary_responses_s1 <- binary_responses[s1,]
+binary_responses_s2 <- binary_responses[s2,]
+
+model3.1 <- kmeans(binary_responses_s1, centers = 3)
+model3.2 <- kmeans(binary_responses_s2, centers = 3)
+
+a <- autoplot(kmeans(binary_responses_s1, centers = 3), 
+         data = binary_responses_s1) + 
+  ggtitle("Three Means Coloring and\nPCA for Binary Data")
+ 
+b <- autoplot(kmeans(binary_responses_s2, centers = 3), 
+         data = binary_responses_s2) + 
+  ggtitle("Three Means Coloring and\nPCA for Binary Data")
+
+c <- ggarrange(a, b, 
+          labels = c("A", "B"),
+          ncol = 2, nrow = 1)
+
+ggsave("figure9.png", plot=c, dpi=400, width=4, height = 1.5, scale=2, unit="in")
+@
+
+<<Results.confirm, echo = FALSE, message = FALSE, warning = FALSE, cache = FALSE, quitely=TRUE, results='hide', fig.width=6, fig.height=6, fig.align='center'>>=
+
+br.wloc.s1 <- binary_responses_s1
+br.wloc.s2 <- binary_responses_s2
+
+br.wloc.s1[,c('lat', 'long')] <- br.wloc[s1,c('lat', 'long')]
+br.wloc.s1$my_clus3 <- model3.1$cluster
+br.wloc.s2[,c('lat', 'long')] <- br.wloc[s2,c('lat', 'long')]
+br.wloc.s2$my_clus3 <- model3.2$cluster
+
+a <- br.wloc.s1 %>% filter(long > -125) %>%
+ggplot() +
+  geom_point(aes(x = long, y = lat, color = factor(my_clus3)), 
+             size = 1) +
+  geom_polygon(aes(x = long, y = lat, group = group),
+               data = state_df, colour = "black", fill = NA) +
+  blank_theme
+
+b <- br.wloc.s2 %>% filter(long > -125) %>%
+ggplot() +
+  geom_point(aes(x = long, y = lat, color = factor(my_clus3)), 
+             size = 1) +
+  geom_polygon(aes(x = long, y = lat, group = group),
+               data = state_df, colour = "black", fill = NA) + 
+  blank_theme
+
+ggsave("figure10.png", plot=a, dpi=400, width=4, height = 2.25, scale=2, unit="in")
+ggsave("figure11.png", plot=b, dpi=400, width=4, height = 2.25, scale=2, unit="in")
+@
+
+\begin{center}
+\includegraphics[width=\textwidth]{figure9.png}
+\end{center}
+
+\begin{center}
+\includegraphics[width=5in,keepaspectratio]{figure10.png}
+\includegraphics[width=5in,keepaspectratio]{figure11.png}
+\end{center}
+
+
+From the above results we can confirm that our conclusions drawn from the PCA plots and k-means clustering
+are stable for simple random samples drawn from the larger data set, and are effective are recapitulating
+our results.
+
+\section{Conclusion}
+
+Our analysis has generated diverse conclusions for several different types of questions.  For the re-examination
+of our redwood data set, we see that different kernel functional forms with different bandwidths can bring about
+different qualitative understandings of the data.  The most plausible explanation seems to be that it is a
+three or four peaked histogram that is well fit by the default Gaussian shape, given an appropriate bandwidth.\\
+\\
+Similarly, our LOESS smoothing examination shows value in larger regions (relative to the whole data set),
+and single polynomial term fittings.  Though it was interesting to view the ways in which the trend line could
+be perturbed by changing to a squared polynomial term fitting with short bandwidths.\\
+\\
+We examined the use of Cramer's V in order to look at the association of certain question answer to question
+answer associations.  Though our heat-map showed that the associations were weak in general, the interactive
+version of these heat-map was useful for identifying the highest association pairs so we could analyze their
+relationship to one another as well as geography.  We looked at an interesting relationship between uses of 
+the ``positive anymore'' and examined prefered nomenclature for pastries.  Another food nomenclature examination
+involved qualitative descriptions of word choice in the US by looking at how the 
+North Eastern, Midwestern, and Southern United States preferred the terms soda, pop, and
+coke (respectively) which describing carbonated beverages.  These regional groupings concerning carbonated
+beverages and pastries would foreshadow results from our k-means analyses in the following section.\\
+\\
+Our PCA showed a tight grouping, and we selected our value for k in k-means clustering by looking at the
+within clusters sum of squares graph for various k's, and attempting to find the ``elbow'' or slope change
+point of the graph.  We experimented further with k values of \(k = 3\) and \(k = 4\) and found \(k = 3\)
+to be sufficient.  When graphed, we see these clusters associate  with the North East, Midwest/Western, and Southern
+United States.\\
+\\
+Finally, to confirm our findings, we sub-sampled our data and saw that for independent sampling of the 
+whole data set, our conclusions drawn from our clustering could be recapitulated.
+
+\section{Acknowledgements}
+
+The author gratefully acknowledges the assistance of *** ******* in discussing various aspects of this lab.
+
+\section{Note to Grader}
+
+If you are attempting to recompile this document, it may take a while.  Please also make sure that you have
+all of the necessary packages installed in your system, since there are quite a few and they will 
+probably not be on your system.
+
+\end{document}
