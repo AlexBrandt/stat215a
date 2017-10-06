@@ -1,0 +1,489 @@
+\documentclass{article}
+
+\usepackage{geometry}
+\geometry{verbose,tmargin=1in,bmargin=1in,lmargin=1in,rmargin=1in}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\setlength{\parskip}{\smallskipamount}
+\setlength{\parindent}{0pt}
+\usepackage{amsthm}
+\usepackage{amsmath}
+
+
+\begin{document}
+
+\title{Lab 2 - Linguistic Survey\\
+Stat 215A, Fall 2017}
+
+
+\author{24978168}
+
+\maketitle
+
+% Load packages and functions
+<<setup, echo = FALSE, message=FALSE, warning=FALSE>>=
+# load packages
+library(knitr)
+library(tidyverse)
+library(stringr)
+library(lubridate)
+library(gridExtra)
+library(maps)
+library(gridExtra)
+library(viridis)
+
+# load functions
+source("R/load.R")
+source("R/clean.R")
+source("R/util.R")
+@
+
+
+\section{Introduction}
+Dialects, or linguistic variations, contain valuable information about the social identity of a group. Dialects may vary according to geography, social class, sex, and age, and thus have a potential to reveal the underlying social identity and shared history of groups of individuals who use similar dialects. In this report, we will explore the Dialect Survey data collected by Vaux [1], which studied the variations in the English language by surveying over 47 thousands individuals in the United States. In particular, we will use dimensionality reduction and clustering methods to gain insight into the relationship between dialect groups and geography. 
+
+
+\section{Kernel Density Estimation and Smoothing}
+Before we dive into the linguistics dataset, we will first explore the effects of kernel function and bandwidth on density estimation. For this purpose, we will use the Redwood dataset from lab 1 [2].
+
+% Load Redwood data
+<<<load-data, echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE>>=
+
+# load the dates data
+dates_orig <- loadDatesData(path = "data/")
+# clean the dates data
+dates <- cleanDatesData(dates_orig)
+
+# load the redwood sensor data
+redwood_net_orig <- loadRedwoodData(path = "data/", source = "net")
+redwood_log_orig <- loadRedwoodData(path = "data/", source = "log")
+# clean the redwood sensor data
+redwood_net <- cleanRedwoodData(redwood_net_orig, dates, TRUE)
+redwood_log <- cleanRedwoodData(redwood_log_orig, dates)
+
+# load combined redwood data
+redwood_combined <- loadCombinedRedwoodData(redwood_log, redwood_net)
+@
+
+\subsection{Kernel Density Estimation}
+Fig \ref{kde_bandwidth} shows the density of the temperature distribution estimated with a Gaussian kernel. We can see that a small bandwidth, $h$, causes low bias and high variance, where the estimated density follows the observed values closely. As we increase the bandwidth, however, the estimated density follows the data less closely, resulting in high bias and low variance. 
+
+Fig \ref{kde_kernel} shows the effects of using different kernel functions on density estimation. As we can see, Gaussian, cosine, and triangular kernel functions gave similar results whereas the rectangular (i.e. uniform) kernel produced a slightly less smooth estimate. 
+
+\begin{figure}
+<<kde_bandwidth, echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE, dev = "png", dpi = 150, fig.height = 4, fig.width = 7, fig.align='center', fig.pos="H">>=
+
+
+plotDensity <- function(h, kernelFun, my_label){
+  # Plot kernel density for a given bandwidth and kernel function. This also plots the histogram of the data.
+  # Args:
+  #   h : double, bandwidth
+  #   kernel: string, kernel function
+  #   my_label: string, legend for the data
+  
+  ggplot(redwood_combined) + 
+    # histogram of the data
+    geom_histogram(aes(x = humid_temp, y = ..density..), 
+                   binwidth = .5,
+                   color = "black", 
+                   fill = "white") + 
+    # kernel density
+    geom_density(aes(x = humid_temp), kernel = kernelFun, bw = h,
+                 fill = "red",
+                 alpha = .2) + 
+    # label the plot
+    labs(x = "Temperature (Celsius)", y = "Density") + 
+    scale_y_continuous(breaks = c(0, .08)) +  
+    annotate("text", x = 30, y = 0.08, label = my_label) + 
+    theme_classic()
+  
+}
+
+# plot density for different values of bandwidth
+bandwidths <- c(.5, 1, 1.5, 2)
+plots <- lapply(bandwidths, 
+                function(x){plotDensity(x, "gaussian", paste("h = ", x))})
+
+# show plots
+grid.arrange(plots[[1]], plots[[2]], 
+             plots[[3]], plots[[4]], 
+             ncol = 2)
+
+@
+\caption{Effects of bandwidth, $h$, on kernel density estimation. Each panel shows the histogram of the data and the estimated density for a particular bandwidth, $h$. A Gaussian kernel was used to estimate the density.}
+\label{kde_bandwidth}
+\end{figure}
+
+
+\begin{figure}
+<<kde_kernel, echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE, dev = "png", dpi = 150, fig.height = 4, fig.width = 7, fig.align='center', fig.pos="H">>=
+
+# plot density for different values of bandwidth
+kernels <- c("gaussian", "rectangular", "cosine", "triangular")
+plots <- lapply(kernels, 
+                function(x){ plotDensity(.5, x, x)})
+
+# show plot
+grid.arrange(plots[[1]], plots[[2]], 
+             plots[[3]], plots[[4]], 
+             ncol = 2)
+
+@
+\caption{Effects of different kernel functions on kernel density estimation. Each panel corresponds to the estimated density for a particular kernel function. The bandwidth was set to .5 for all kernel functions.}
+\label{kde_kernel}
+\end{figure}
+
+
+
+\subsection{LOESS}
+Now we turn to exploring the effects of bandwidth on LOESS. Similar to kernel density estimation, Fig \ref{loess} shows that a small bandwidth resulted in a wiggly fit that followed the data more closely whereas a higher bandwidth produced a smoother fit. The degree of polynomials had a similar effect; as we can see in Fig \ref{loess_degree}, a higher degree of polynomials produced high variance and low bias, whereas a lower degree produced lower variance but higher bias. 
+
+
+\begin{figure}
+<<loess, echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE, dev = "png", dpi = 100, fig.height = 3, fig.width = 7, fig.align='center', fig.pos="H">>=
+
+plotLOESS <- function(h, degree = 1, my_label){
+  
+  # Plot LOESS for a given bandwidth and degree of of polynomials. This also plots the scatterplot of the data.
+  # Args:
+  #   h : double, bandwidth
+  #   degree: int, degree of polynomial
+  #   my_label: string, legend for the data
+  
+  #filter data
+  redwood_combined %>%
+    # select data for 11am
+    filter(epoch %% 288 == 215) %>%
+    # plot!
+    ggplot() + 
+    # scatter plot of data
+    geom_point(aes(x = humid_temp, y = humidity),  alpha = .3) +
+    # loess plot
+    geom_smooth(aes(x = humid_temp, y = humidity), method = "loess",
+                formula = y ~ poly(x, degree),
+                span = h) + 
+    # label the plot
+    labs(x = "Temperature (Celsius)", y = "Humidity (%RH)") +
+    annotate("text", x = 27, y = 80, label =  my_label) + 
+    theme_classic()
+
+}
+  
+
+bandwidths <- c(.5, 2)
+plots <- lapply(bandwidths, 
+                function(x){plotLOESS(x, 1, paste("h = ", x))})
+
+# show plot in a panel
+grid.arrange(plots[[1]], plots[[2]],
+             ncol = 2)
+@
+\caption{Effects of bandwidth on LOESS. The degree of polynomial was set to 1.}
+\label{loess}
+\end{figure}
+
+
+\begin{figure}
+<<loess_degree, echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE, dev = "png", dpi = 150, fig.height = 4, fig.width = 7, fig.align='center', fig.pos="H">>=
+
+# LOESS for different degrees of polynomials: 1,2,3,4
+degrees <- c(1, 2, 3, 4)
+plots <- lapply(degrees, 
+                function(x){plotLOESS(2, x, paste("degree = ", x))})
+
+# show plot in a panel
+grid.arrange(plots[[1]], plots[[2]], plots[[3]], plots[[4]],
+             ncol = 2)
+@
+\caption{Effects of degree of polynomials on LOESS. The bandwidth was set to 2.}
+\label{loess_degree}
+\end{figure}
+
+
+\section{The Data}
+The second part of this report explores the linguistics data collected by the Harvard Dialect Survey in 2003. The survey consisted of a series of questions that explored the variations in the phonetic and lexical differences in the English language in the United States. In this report, we will focus on analyzing 67 questions that explore lexical differences (e.g. What do you call it when rain falls while the sun is shining?). 
+
+We have two different representations of the dataset: LingData and LingLocation. LingData includes the categorical responses to 67 survey questions by 47,471 respondents. It also contains information about the reported location of each respondent, given by state, city and zip code. Also included in the data are the latitude and longitude of the center of each zip code. 
+
+The second dataset, LingLocation, is a binary encoding of the categorical data described above. The observations were then binned into one degree longitude by one degree latitude squares, which partitions the map of US into 781 cells. The data for each square is encoded as the sum of binary response vectors for individuals who belong to the cell. 
+
+
+\subsection{Data Quality and Cleaning}
+For LingData, I removed 1020 observations for which either longitude or latitude information was missing. Furthermore, 107 observations from Hawaii and 98 individuals from Alaska were excluded to restrict the analyses to the 48 contiguous states. Furthermore, there were individuals who had missing responses to some of the survey questions. Since we had a large number of observations to work with, I chose to apply a stringent filter that removed any observations for which there was missing data for any of the questions asked. This left us with 39,051 observations for downstream analyses. 
+
+Similarly for LingLocation, cells that corresponded to Hawaii or Alaska were removed (i.e. longitude $<$ -150 or latitude $>$ 50). This reduced the original count of 781 cells to 527. Furthermore, there were instances where the number of individuals who responded to a question in a cell did not add up to the total number of people in that cell. Since this type of missing data was more difficult to filter out, I chose not to remove such observations. Therefore, I chose to use LingData for the main analyses and use LingLocation primarily to validate those results (see Stability of Findings for further discussion). 
+  
+
+<<load_ling_data, echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE>>=
+
+# load linguistics data
+ling_data_orig <- loadLingData(path = "data/")
+ling_location_orig <- loadLingLocation(path = "data/")
+
+# quest.use: questions in words
+# all.ans: maps letter answer to word answer for each question
+load("data/question_data.RData")
+
+
+# clean data
+ling_data <- cleanLingData(ling_data_orig)
+ling_location <- cleanLingLocation(ling_location_orig)
+
+@
+
+
+
+\subsection{Exploratory Data Analysis}
+
+Here we explore a few survey questions and their potential relationship to geography. Fig \ref{explore_1}A shows the distribution of the responses to the question: What do call the rubber-soled shoes worn in gym class? The plot shows the distribution of the two most common answers, which were "sneakers" and "tennis shoes". As we can see from the figure, those who answered "sneakers" are concentrated in the Northeast whereas the word "tennis shoes" is more commonly used throughout the rest of the country. 
+
+Fig \ref{explore_1}B shows the distribution of the most common answers to the question: What do you call the thing from which you might drink water in a school? Here we see a loose partition for those who chose "drinking fountain" versus "water fountain." The term "water fountain" seems to be more commonly used in the West, with a high concentration in southern California. On the other hand, "drinking fountain" seems to be more favored in the Northeast and the Southeast. The Midwest seems to use both terms at similar frequencies. Interestingly, individuals who responded "bubbler" form small isolated groups and were primarily from Wisconsin, Massachusetts, and Rhode Island.
+
+
+\begin{figure}
+<<explore_1, echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE, dev = "png", dpi = 150, fig.height = 6, fig.width = 6, fig.align='center', fig.pos="H">>=
+
+# load map data
+state_df <- map_data("state")
+
+# make dataframes for questions 73 and 103
+responses_1 <- getDataForQuestion(ling_data, "073", c(1,6))
+responses_2 <- getDataForQuestion(ling_data, "103", c(1,3,4))
+
+# plot data on the map
+plot1 <- plotMap(responses_1, state_df, "(A)")
+plot2 <- plotMap(responses_2, state_df, "(B)")
+grid.arrange(plot1, plot2, nrow=2)
+
+@
+\caption{Distribution of responses in the lower 48 states. (A) What is your general term for rubber-soled shoes worn in gym class? 
+(B) What do you call the thing from which you might drink water in a school?}
+\label{explore_1}
+\end{figure}
+
+
+Experimenting with linked brushing (see "/extra/linked\_brushing\_2questions.html") showed that the response to question 73 does not help predict the response to question 103. Linked brushing with three questions (see "/extra/linked\_brushing\_3questions.html") showed that we gain a bit more information. For example, if an individual answered "drinking fountain" for question 73 and "tennis shoes" for question 103, then they are not likely to call the night before Halloween as "mischief night." This suggests that the responses to some groups of questions may be correlated with each other.
+
+\begin{figure}
+<<explore_4, echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE, dev = "png", dpi = 100, fig.height = 4, fig.width = 7, pos = "H">>=
+
+# convert categorial responses to binary data
+# columns to be converted
+col_names <- colnames(ling_data)[5:71]
+# convert
+x <- lapply(col_names, function(x) convertToBinary(x, ling_data))
+# bind converted columns into a single matrix
+X <- do.call(cbind, x) %>%
+  mutate(long = ling_data$long, lat = ling_data$lat)
+
+# run PCA and project the data onto the PC space
+Y <- rotateData(X)
+
+# plot projected data
+Y %>%
+  # downsample for better visualization
+  sample_frac(.1) %>%
+  # plot
+  ggplot() + 
+    # color code by the longitude
+    geom_point(aes(x = X1, y = X2, color = long), alpha = .5) +
+    # label axes
+    labs(x = "PC1", y = "PC2", color = "Longitude") +
+    scale_color_viridis() +
+    theme_classic()
+
+@
+\caption{Projection of LingData onto the first two principal components.}
+\label{explore_4}
+\end{figure}
+
+
+\begin{figure}
+<<scree_plot, echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE, fig.height = 3, fig.width = 5, fig.pos="H", dev = "png", dpi = 200>>=
+
+# run PCA on lingData
+pca <- X %>%
+  # remove the location columns
+  select(-long, -lat) %>%
+  # scale data
+  scale(center = TRUE, scale = TRUE) %>%
+  # compute the covariance
+  cov() %>%
+  # find the eigenvalues and eigenvectors
+  eigen()
+
+
+# total amount of variance
+total_var <- sum(pca$values)
+
+# eblow plot
+ggplot() + 
+  # plot cumulative sum of eigenvalues
+  geom_point(aes(x = 1:10, y = cumsum(pca$values[1:10]) / total_var), size = 2, color = "blue") + 
+  # connect the points with a line
+  geom_line(aes(x = 1:10, y = cumsum(pca$values[1:10]) / total_var)) +
+  # label plot
+  labs(x = "Principal component", y = "Cumulative proportion of\n variability explained") + 
+  scale_x_continuous(breaks = 1:10) + 
+  theme_classic()
+
+
+@
+\caption{Amount of variability explained by the first 10 principal components.}
+\label{scree_plot}
+\end{figure}
+
+
+Now we turn to reducing the dimension of the data. Fig \ref{explore_4} shows the projection of the binary representation of LingData onto the first two principal components. Here, we see that the observations form loose clusters according to their longitudinal location. This suggests that we may able to relate the linguistics data to geography, which will be discussed further in Dimension Reduction Methods. Furthermore, Fig \ref{scree_plot} shows that the first ten principal components explain only a modest proportion of the total variability, suggesting that the underlying cause for linguistic variations is not simplistic and its complexity cannot be captured by a few features. 
+
+\section{Dimension Reduction Methods}
+In order to gain insight into the potential relationship between dialect groups and geography, I performed k-means clustering on the first two principal components computed in the previous section. The number of cluster, $k$, was set to 3, which gave the highest average silhouette value. Fig \ref{k-means} shows the distribution of the cluster members on the map of the US. Here we can see three general geographical clusters: 1) the Northeast, 2) the Southeast, and 3) a super region including the Midwest, the Southwest, and the West. The geographical clusters are not clean-cut, however. There is a fair amount of overlap between clusters on border regions; we also see many outliers, such as the members of the "Northeast cluster" residing in Florida. 
+
+
+\begin{figure}
+<<kmeans, echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE, dev = "png", dpi = 100, fig.height = 4, fig.width = 7, fig.pos="H">>=
+
+# run k means on pc1 and pc2
+kmeans <- Y[, 1:2] %>%
+  kmeans(centers = 3)
+
+
+# plot k-means clusters on the map
+plotKmeans(kmeans, Y, alpha = .5, sample_rate = .5)
+
+
+@
+\caption{Distribution of the individuals in the US, color-coded by their k-means cluster assignment. k-means clustering with $k$ = 3 was used on the first two principal components. The clusters correspond to three geographical groupings. Only 50 percent of the data are plotted for visualization.}
+\label{k-means}
+\end{figure}
+
+
+To explore some of the survey questions that separate the groups, I looked at questions 73 and 50, which had the highest loadings for the first and second principal components, respectively. As we can see in Fig \ref{important_questions}A, question 73 separates the Northeast from other regions. More specifically, those who responded "sneakers" are concentrated in the Northeast whereas those who responded "tennis shoes" are spread across the rest of the country. Question 50, on the other hand, separates the northern regions from the southern regions. The term "y'all" is predominantly used in the Southeast and Texas, while the other terms such as "you" and "you guys" are more commonly used in other regions of the country. Interestingly, we can see that the separations defined by these two questions are also present in the geographical clusters we found before in Fig \ref{k-means}, which agrees with our expectation that these two questions contribute to the separation of the groups. 
+
+As mentioned before in Fig \ref{scree_plot}, it is important to note that the total variability in the data cannot be explained by a few of principal components. This suggests that the underlying cause for linguistics dataset is very complex and/or the relationships between the variables may not be linear as assumed by PCA. In the latter case, it may be worthwhile to try transforming the variables so that they have more linear relationships or using a nonlinear dimension reduction method.
+
+
+\begin{figure}
+<<questions, echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE, dev = "png", dpi = 100,fig.height = 6, fig.width = 6, fig.pos="H">>=
+
+# question with highest loading for PC1
+responses_1 <- getDataForQuestion(ling_data, "073", c(1,6)) 
+# question with highest loading for PC2
+responses_2 <- getDataForQuestion(ling_data, "050", c(1,4,7,9))
+
+# plot data on the map
+plot1 <- plotMap(responses_1, state_df, "(A) What is your general term for the rubber-soled shoes worn in gym class, for athletic activities?")
+plot2 <- plotMap(responses_2, state_df, "(B) What word(s) do you use to address a group of two or more people?")
+grid.arrange(plot1, plot2,
+             nrow=2)
+
+
+@
+\caption{Distribution of the responses to the questions with the highest PCA loadings. (A) Responses to question 73 (highest loading for PC1); (B) Responses to question 50 (highest loading for PC2). Only the answers with at least 10 percent response rate are shown.}
+\label{important_questions}
+\end{figure}
+
+
+\section{Stability of Findings to Perturbation}
+Here we check whether the three geographical clusters we found in the previous section are stable under various perturbations to the data. First, I ran the k-means clustering algorithm four times with different starting points. Fig \ref{multiple_runs} shows that each run of k-means produced very similar clusters and our finding, therefore, is stable under different starting points.  
+
+\begin{figure}
+<<multiple_runs, echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE, dev = "png", dpi = 100, fig.height = 3, fig.width = 7, fig.pos="H">>=
+
+# run k-means 4 times
+kmeans_runs <- lapply(1:4, function(x){kmeans(Y[, 1:2], centers = 3)})
+
+# plot kmeans clusters on the map
+plots <- lapply(kmeans_runs, plotKmeans, data = Y, alpha = .5, sample_rate = .2)
+
+# show plot
+grid.arrange(plots[[1]], plots[[2]], plots[[3]], plots[[4]],
+             ncol = 2, nrow = 2)
+
+@
+\caption{The results of four runs of k-means with different starting points. All four runs show similar geographical clusters we found before. The mapping from color to cluster is arbitrary.}
+\label{multiple_runs}
+\end{figure}
+
+Next, I downsampled the data by half and re-ran PCA and k-means on the first two principal components. As we can see in Fig \ref{perturb}A, the three geographical clusters are still present on the downsampled data. To investigate the effects of removing questions from the dataset, I excluded from analyses questions 73 and 50, which had the highest loadings for the first two principal components, respectively. Fig \ref{perturb}B shows that we still find similar geographical clusters, implying that there must be other survey questions in the perturbed dataset that separate the groups in a similar way. 
+
+\begin{figure}
+<<downsample, echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE, dev = "png", dpi = 100,fig.height = 6, fig.width = 6, fig.pos="H">>=
+
+############# analysis on downsampled data ############
+# run PCA 
+Y_downsampled <- X %>%
+  # downsample data
+  sample_frac(.5) %>%
+  # run PCA and rotate data
+  rotateData()
+
+# run k-means on the first two PCs
+kmeans_downsampled <- kmeans(Y_downsampled[, 1:2], centers = 3)
+  
+####### analysis on data where two questions were removed ##########
+# remove question 50 and 73
+Y_removed <- X %>%
+  # remove questions 50 and 73
+  select(-starts_with("q073"), -starts_with("q050")) %>%
+  # rotate data
+  rotateData()
+
+# run k-means
+kmeans_removed <- kmeans(Y_removed[, 1:2], centers = 3)
+
+# plot results for both
+p1 <- plotKmeans(kmeans_downsampled, Y_downsampled, alpha = .5,  sample_rate = .2) +
+      labs(subtitle = "(A)")
+p2 <- plotKmeans(kmeans_removed, Y_removed, alpha = .5, sample_rate = .2) + 
+  labs(subtitle = "(B)")
+
+# show plots
+grid.arrange(p1, p2, nrow = 2)
+
+@
+\caption{ The result of spectral clustering (A) after removing 50 percent of the observations; (B) after removing questions 50 and 73, which had the highest PCA loading for the first and second principal components, respectively. The three geographical clusters found on the original data are still present here.}
+\label{perturb}
+\end{figure}
+
+
+Finally, I checked whether re-running the analysis on a different encoding of the data would produce similar results. In order to see this, I ran PCA and k-means on LingLocation, which bins the observations in one degree latitude by one degree longitude squares. Fig \ref{lingLocation} shows that the three geographical clusters we find are similar to those shown in Fig \ref{k-means}. Thus our finding that linguistic variations relate to three distinct geographical groups is stable under perturbations to the data. 
+
+
+\begin{figure}
+<<lingLocation, echo = FALSE, message = FALSE, warning = FALSE, cache = TRUE, dev = "png", dpi = 100, fig.height = 4, fig.width = 7, fig.pos="H">>=
+
+# Run spectral clustering on LingLocation
+Y_ling_location <- ling_location %>%
+  # remove non-question columns
+  select(-n, -lat, -long) %>%
+  # normalize each row
+  mutate_all(funs(./ling_location$n)) %>%
+  # add back latitude and longitude data
+  mutate(lat = ling_location$lat, long = ling_location$long) %>%
+  # rotate data via PCA
+  rotateData()
+
+# run k means on pc1 and pc2
+kmeans_ling_location <- Y_ling_location[, 1:2] %>%
+  kmeans(centers = 3)
+
+# plot k-means clusters on the map
+plotKmeans(kmeans_ling_location, Y_ling_location, alpha = 1, sample_rate = 1)
+
+@
+\caption{The result of spectral clustering on "LingLocation." The three geographical clusters found on the original data are still present here.}
+\label{lingLocation}
+\end{figure}
+
+\section{Conclusion}
+In this report, we explored the linguistic variations in the English language by analyzing the data collected by the Harvard Dialect Survey. In particular, dimensionality reduction by PCA showed that the the total variability in the data cannot be explained by a few principal components, implying the complex nature of underlying cause for the linguistic variations. Furthermore, we saw that the individuals form groups that correspond to three fairly distinct geographical regions: 1) the Northeast, 2) the Southeast, and 3) a combined region of the West, the Southwest, and the Midwest. Finally, our finding was stable under several types of perturbations to the data, such as downsampling, removal of several questions, using different starting points for k-means clustering, and using a different encoding of the data, giving us confidence to the robustness of our finding. 
+
+
+\begin{thebibliography}{1}
+\bibitem{linguistic}Vaux, Bert. "Harvard Dialect Survey." dialect.redlog.net. Harvard University. 2003. Web.
+\bibitem{redwood}Tolle, Gilman, et al. "A macroscope in the redwoods." Proceedings of the 3rd international conference on Embedded networked sensor systems. ACM, 2005.
+\end{thebibliography}
+
+
+\end{document}

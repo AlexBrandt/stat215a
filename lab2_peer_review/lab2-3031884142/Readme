@@ -1,0 +1,4 @@
+If you cannot compile the .Rmd, please check:
+1. All the required packages are correctly installed;
+2. 'zipcode.csv' exists in R/ ;
+3. If not, it's available at http://www.boutell.com/zipcodes/

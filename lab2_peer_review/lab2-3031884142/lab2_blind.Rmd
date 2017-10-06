@@ -1,0 +1,833 @@
+---
+title: "Lab 2 - Linguistic Survey Stat 215A, Fall 2017"
+author: "3031884142"
+date: "10/5/2017"
+header-includes:
+   - \usepackage{float}
+output: 
+  pdf_document:
+    number_sections: true
+bibliography: lab2.bib
+csl: institute-of-mathematical-statistics.csl
+---
+
+```{r setup, include=FALSE}
+# Global chunk setup
+knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE, dev = 'png', dpi = 240, fig.width = 6)
+```
+
+```{r prerequisites, include=FALSE}
+# load in packages
+packages <- c("tidyverse", "reshape2", "knitr", "gridExtra", 
+              "cluster", "forcats", "lubridate", "stringr",
+              "ggthemes", "RCurl", "maps", "sp", "irlba",
+              "data.table", "cluster", "fpc", "GGally",
+              "rdist", "factoextra", "clue")
+lapply(packages, require, character.only = TRUE)
+
+# load in useful functions
+source("R/functions.R")
+
+```
+
+# Introduction
+
+In this report, we first apply the density estimation and loess smoothing to the redwood data[@tolle2005macroscope] from the previous lab and then we analyze the linguistic data of a 2003 Harvard Dialect Survey[@nerbonne2003introducing; @nerbonne2006progress]. For the Harvard Dialect Survey we discuss the issues of data cleaning, binarization and aggregation; then we use Principal Component Analysis (PCA), Multidimensional Scaling (MDS), k-means and k-medoids to perform dimension reduction and clustering; in the last part, we perturbed the answers and the questions respectively to check the robustness of an interesting finding : the 4 linguistic cluster coincide with the 4 regions defined by the US Census Bureau.
+
+# Kernal density plots and smoothing
+
+```{r lab1_data}
+# load in the cleanData() functions
+source("R/lab1_clean.R")
+
+# load in the cleaned data with there original names
+all <- LoadRData(all)
+locs <- LoadRData(locs)
+```
+
+The data we are using here is a sample of size 10000 from the cleaned redwood data.
+
+```{r temp_dens_kern, fig.cap="\\label{fig:temp_dens_kern} Density Estimation of Temperature with Different Bandwidth and Different Kernals", fig.height= 4, fig.pos= 'H'}
+
+# only keep temperature info and sample with size 10000
+all_humid_temp <- select(all, c(humid_temp)) %>% SampleData(10000)
+
+# estimate density using stat_density
+DensityEstimation <- function(kernel = "gaussian", size = 0.4, alpha = 0.7){ # size and alpha for tiny figures
+    ggplot(all_humid_temp, aes(all_humid_temp)) +
+        # put four different bandwidth in a single figure
+        stat_density(aes(color = "1"), geom = "line", size = size, alpha = alpha, adjust = 1, kernel = kernel) +
+        stat_density(aes(color = "2"), geom = "line", size = size, alpha = alpha, adjust = 2, kernel = kernel) +
+        stat_density(aes(color = "3"), geom = "line", size = size, alpha = alpha, adjust = 3, kernel = kernel) +
+        stat_density(aes(color = "5"), geom = "line", size = size, alpha = alpha, adjust = 5, kernel = kernel) +
+        scale_color_manual(name = "Bandwidth", 
+                           values = c("1" = "#EE4433", "2" = "#FFBB44", "3" = "#2B88BB", "5" = "#339955")) + 
+        #guides(colour = guide_legend(override.aes = list(alpha = 1))) + # force the legend to have alpha 1
+        scale_x_continuous(name = 'Temperature', breaks = c(10, 20, 30)) + # set x axis to be clear as tiny figures
+        scale_y_continuous(name = 'Density', breaks = c(0)) + 
+        ggtitle(kernel) +
+        theme_bw() + theme(panel.grid=element_blank()) + # white background
+        theme(legend.position = 'null', 
+              axis.text.y = element_blank(), axis.ticks = element_blank(), 
+              plot.title = element_text(size = 8), axis.title = element_text(size = 8)) # omit y axis texts and ticks
+}
+
+# plot with all 7 built-in kernels
+density_gaussian <- DensityEstimation("gaussian")
+density_epanechnikov <- DensityEstimation("epanechnikov")
+density_rectangular <- DensityEstimation("rectangular")
+density_triangular <- DensityEstimation("triangular")
+density_biweight <- DensityEstimation("biweight")
+density_cosine <- DensityEstimation("cosine")
+density_optcosine <- DensityEstimation("optcosine")
+
+# use a dummy data to plot the legend for the tiny figures
+dummy_data <- as.data.frame(1)
+legend <- ggplot(dummy_data, aes(dummy_data)) +
+    stat_density(aes(color = "1"), geom = "line", adjust = 1, kernel = kernel) +
+    stat_density(aes(color = "2"), geom = "line", adjust = 2, kernel = kernel) +
+    stat_density(aes(color = "3"), geom = "line", adjust = 3, kernel = kernel) +
+    stat_density(aes(color = "5"), geom = "line", adjust = 5, kernel = kernel) +
+    scale_color_manual(name = "Bandwidth",
+                       values = c("1" = "#EE4433", "2" = "#FFBB44", "3" = "#2B88BB", "5" = "#339955")) + 
+    guides(colour = guide_legend(override.aes = list(alpha = 0.7))) + # force the legend to have alpha 1
+    xlab(NULL) + ylab(NULL) + theme_tufte() + # hide everything
+    theme(legend.position = c(0.5, 0.5), legend.key.width=unit(1,"cm"), legend.title = element_text(size = 8)) + # adjust legend size and position
+    theme(axis.text = element_blank(), axis.ticks = element_blank()) # hide everything
+
+# arrange these 8 figures on a 2x4 grid
+grid.arrange(density_gaussian, density_epanechnikov, density_rectangular,
+             density_triangular, density_biweight, density_cosine, density_optcosine, legend, ncol=4)
+```
+
+In Figure \ref{fig:temp_dens_kern}, we use 7 kernel functions: Gaussian kernal, Epanechnikov kernal, rectangular kernal, triangular kernel, biweight kernel, cosine kernal and optcosine kernel. The bandwidth is chosen to be $h, 2h, 3h$ and $5h$, where $h$ is a rule-of-thumb baseline bandwidth defined as $0.9 \min \{\hat\sigma, \hat q / 1.34\} n ^ {-\frac 15}$ where $q$ is the interquartile. It turns out that a larger bandwidth produces a smoother density estimation, and vice versa. The estimation using all these seven kernels are very similar to one another except the rectangular kernel. I think the reason is that rectangular kernel is discontinuous and hence requires larger bandwidth (which somehow 'decreases' the discontinuity) to achieve the same smoothness.
+
+In Figure \ref{fig:loess_smooth}, we plot the loess smoothing lines for the temperature against the humidity at the $72$-th epoch every day. We tried different spans and all three degrees of local polynomials. From the figure, it's seen that a higher span produces smoother lines since the estimation involves more effective data points. Besides, a lower degree produces less smooth lines, since the complexity of model is lower.
+
+```{r loess_smooth, fig.cap="\\label{fig:loess_smooth} Loess Smoothing with Different Spans and Different Degrees of Polynomials", fig.height= 5, fig.pos= 'H'}
+
+# list of all whose epoch mod 288 is 72
+epoch_list <- seq(from = 72, to = max(select(all, epoch)), by = 288)
+# only keep humidity and temperature for those epochs
+all_temperature_humidity <- filter(all, epoch %in% epoch_list) %>% 
+    select(c(humidity, humid_temp))
+
+# add loess smooth using stat_smooth
+LoessPredict <- function(span, degree) {
+    l <- loess(humid_temp ~ humidity, 
+               data = all_temperature_humidity, 
+               span = span, degree = degree)
+    predict(l, all_temperature_humidity$humidity) # predict on existing humidity data
+}
+
+LoessSmoothing <- function(degree, size = 0.6, alpha = 0.5){ # size and alpha for tiny figures
+    span_01 <- LoessPredict(span = 0.1, degree = degree)
+    span_03 <- LoessPredict(span = 0.3, degree = degree)
+    span_05 <- LoessPredict(span = 0.5, degree = degree)
+    span_07 <- LoessPredict(span = 0.7, degree = degree)
+    
+    ggplot(all_temperature_humidity) +
+        # plot points for visualization
+        geom_point(aes(humidity, humid_temp), alpha = 0.2, size = 0.1) +
+        # put four different spans in a single figure
+        geom_line(aes(humidity, span_01, color = '0.1'), size = size, alpha = alpha) +
+        geom_line(aes(humidity, span_03, color = '0.3'), size = size, alpha = alpha) +
+        geom_line(aes(humidity, span_05, color = '0.5'), size = size, alpha = alpha) +
+        geom_line(aes(humidity, span_07, color = '0.7'), size = size, alpha = alpha) +
+        scale_color_manual(name = "Span",
+                           values = c("0.1" = "#EE4433", "0.3" = "#FFBB44", 
+                                      "0.5" = "#2B88BB", "0.7" = "#339955")) + 
+        xlab("Humidity") + ylab("Temperature") + ggtitle(paste("Degree =", degree)) +
+        theme_bw() + theme(panel.grid=element_blank()) + # white background
+        theme(legend.position = "null", # remove legend 
+              plot.title = element_text(size = 8), axis.title = element_text(size = 8)) # adjust title size for tiny subfigures
+}
+
+# try all three degrees for localpolynomials
+lowess_degree0 <- LoessSmoothing(degree=0)
+lowess_degree1 <- LoessSmoothing(degree=1)
+lowess_degree2 <- LoessSmoothing(degree=2)
+
+# use a dummy data to plot the legend for the tiny figures
+legend <- ggplot(dummy_data, aes(dummy_data)) +
+        stat_density(aes(color = "0.1"), geom = "line", adjust = 1, kernel = kernel) +
+        stat_density(aes(color = "0.3"), geom = "line", adjust = 2, kernel = kernel) +
+        stat_density(aes(color = "0.5"), geom = "line", adjust = 3, kernel = kernel) +
+        stat_density(aes(color = "0.7"), geom = "line", adjust = 5, kernel = kernel) +
+        scale_color_manual(name = "Span",
+                           values = c("0.1" = "#EE4433", "0.3" = "#FFBB44", "0.5" = "#2B88BB", "0.7" = "#339955")) + 
+        guides(colour = guide_legend(override.aes = list(alpha = 1))) + # force the legend to have alpha 1
+        xlab(NULL) + ylab(NULL) + theme_tufte() + # hide everything
+        theme(legend.position = c(0.5, 0.5), legend.key.width=unit(1,"cm"), legend.title = element_text(size = 8)) + # adjust legend size and position
+        theme(axis.text = element_blank(), axis.ticks = element_blank()) # hide everything
+
+grid.arrange(lowess_degree0, lowess_degree1, lowess_degree2, legend, ncol=2)
+```
+
+# The Data
+Now we move on to a new set of data. The data contains two parts, ¡°question_data¡± and ¡°lingData¡±, corresponding to the questions and the answers from the respondents. 47471 people from across the United States participated in this linguistic research and answered all or parts of 122 questions.
+
+In this report we are only interested in 67 questions. ¡°lingData¡± contains the answers of all people as well as their ID, city, state, ZIP code, latitude and longitude. If one person does not answer one question, ¡°0¡± is recorded. ¡°question data¡± contains the information of the questionaire, including the questions and the answers.
+
+## Data quality and cleaning
+
+This dataset isn't as bad as the redwood data, but there are still some issues. Therefore, we carefully check the data quality and clean it in this paper. For the sake of length, only important issues are clarified here. All other details can be found in the comments of ¡°R/clean.R¡±.
+
+It is found that there is a one-to-one map from ZIP code to latitude and longitude. But there are 1020 records, from 200 different ZIP code areas, have missing values in latitude and longitude. We download a free database from http://www.boutell.com/zipcodes/ and fill in the missing values of 67 ZIP code areas. For the rest part, we write a web crawler in R trying to get them from https://usa.youbianku.com/zipcode/. Only several more is completed, therefore it is removed from the data cleaning code since it's time consuming.
+
+After checking the left ZIP code, we find out that they are either not ZIP codes in contiguous US or even not valid at all. Besides, there are 208 more records locating Alaska or Hawaii. Since this is quite small comparing with a total of over 46 thousand records, we remove all 858 records corresponding to these ZIP codes for future convenience in processing and presentation, see Figure \ref{fig:geo_dist}.
+
+```{r geo_dist, fig.cap="\\label{fig:geo_dist} Geographical Distribution of Survey Answers", fig.height= 2.5, fig.pos= 'H'}
+
+# load in the cleanData() functions
+source("R/clean.R")
+
+# load data from data\
+geo_location <- LoadRData(geo_location)
+
+# get world graph data from package "maps"
+world_map <- map_data("world")
+mainland_map <- map_data("state")
+
+world_distribution <- ggplot(world_map, aes(x = long, y = lat)) +
+    geom_polygon(aes(group = group), color = "#444444", fill = NA, size = 0.1, alpha = 0.4) +
+    geom_point(aes(x = long, y = lat, color = 'Mainland'), size = 0.1, alpha = 0.2, data = filter(geo_location, long > -130)) + 
+    geom_point(aes(x = long, y = lat, color = 'AK / HI'), size = 0.2, alpha = 1.0, data = filter(geo_location, long <= -130)) + scale_color_manual(name = NULL,
+                           values = c("Mainland" = "#2B88BB", "AK / HI" = "#EE4433")) + 
+    scale_x_continuous(name = 'Longditude', limits = c(-170, -60)) +
+    scale_y_continuous(name = 'Latitude', limits = c(5, 80)) +
+    ggtitle('World') +
+    theme_bw() + theme(panel.grid=element_blank(), panel.border=element_blank()) + # white background
+    theme(plot.title = element_text(size = 10)) +
+    theme(axis.line = element_blank(), axis.title = element_blank(),
+          axis.ticks = element_blank(), axis.text = element_blank(),
+          plot.background = element_blank()) +
+    theme(legend.text = element_text(size = 8, angle = 30), legend.box.margin=margin(4,-4,4,-10))
+
+mainland_distribution <- ggplot(mainland_map, aes(x = long, y = lat)) +
+    geom_polygon(aes(group = group), color = "#444444", fill = NA, size = 0.1, alpha = 0.4) +
+    geom_point(aes(x = long, y = lat), color = '#2B88BB', size = 0.2, alpha = 0.2, data = filter(geo_location, long > -130)) + 
+    scale_x_continuous(name = 'Longditude') +
+    scale_y_continuous(name = 'Latitude') +
+    ggtitle('Contiguous US') +
+    theme_bw() + theme(panel.grid=element_blank(), panel.border=element_blank()) + # white background, no border
+    theme(plot.title = element_text(size = 10)) +
+    theme(axis.line = element_blank(), axis.title = element_blank(),
+          axis.ticks = element_blank(), axis.text = element_blank(),
+          plot.background = element_blank())
+    
+grid.arrange(world_distribution, mainland_distribution, ncol=2)
+    
+```
+
+Then we move on to check the involvement of each person, that is, the number of questions a participant answers. If only a small proportion of questions is answered, then it is unwise to retain them in the dataset since the participant might just randomly answer several questions. It turns out that 84% of people answered all questions. Figure 1 shows the relationship between the number of answered questions and the number of people answering no more than that number of questions, that is, the $f(n) = \#\{i : i$-th person answers no more than n questions$\}$. It is observed that 1021 people answered no questions and there are only 456 people answering several but no more than 57 questions. We must remove the people answering small number of questions, so it delete all those who answered less than 57 questions is a proper choice. Here 57 comes from Figure \ref{fig:less_than}. In this figure, we set the y axis in a logarithm form and it is seen that the slope becomes much greater when the number of questions answered becomes larger than 57. But in fact, it makes little difference if we change to any integer from 55 to 60.
+
+```{r binarize}
+# load in the binarize R script
+source("R/binarize.R")
+
+```
+
+```{r less_than, fig.cap="\\label{fig:less_than} Number of Participants Answering No More Than X Questions", fig.height= 2, fig.width= 2.5, fig.pos= 'H'}
+
+# load data from data\
+less_than <- LoadRData(less_than)
+
+# get world graph data from package "maps"
+world_map <- map_data("world")
+mainland_map <- map_data("state")
+
+ggplot(less_than, aes(x = num_ans, y = num_sample)) + geom_line() +
+        scale_y_log10(breaks = c(1000, 1477, 2000, 4000)) + # use a log scale to see more clearly
+        scale_x_continuous(breaks = c(0, 22, 44, 57, 66)) +
+        # pointing out the turning point
+        #geom_hline(yintercept = 1477, color = "red") +
+        geom_vline(xintercept = 57, color = "red") +
+        xlab('X') + ylab("Number of Participants") +
+        theme_bw() + theme(panel.border = element_blank()) + # white background
+        theme(plot.title = element_text(size = 10), axis.title = element_text(size = 10))
+    
+```
+
+## Data Binarizaion
+
+For the convenience of further analysis, we first transform "lingData" into a binary form, say, "lingData_binary". This is to create one column for each possible choice of each question. For example, if John chose the $j$-th answer for the $k$-th question which contains $n$ choices, then his record to this question is an $n$-dimensional vector with its $j$-th entry to be 1 while all others 0. Besides, if he did not answer the $k$-th question, the record is a zero vector. In this way, 67 answer columns in "lingData" are splitted into 468 columns with only entries in $\{0, 1\}$.
+
+## Data Aggregation
+
+```{r binarize_aggregate}
+# load in the aggregate R script
+source("R/aggregation.R")
+
+```
+
+Over 45 thousand lines of data seems too large for the following analysis, and retaining the individual answers doesn't help analyze in any sence. Therfore, aggregation can eliminate some individual noises as well as improve the robustness. Here we use the binarized "lingData_binary" to perform aggregation. In this dataset, the average of a group of observations represents the proportion of each answer for each question, which can be regarded as a reasonable summarization of the group. In the following discussion, we will use averaging as the technique for aggregation.
+
+A natural way to group is putting data with the same location together. In particular, we can perform aggregation with regard to zip codes. Since there are over 45 thousand lines in "lingData_binary", while the number of unique zip codes is only 11393, this zip code aggregation can reduce the number of lines by nearly three fourths. 
+
+We can aggregate the data one step further using the county map data from R package "maps". This could further reduce the time for computation while retaining visual effect and geographical information. Figure \ref{fig:county_sample_size} visualizes the number of samples in each county across contiguous United States. It is seen that many counties have sample size 0, especially in the western part, such as Nevada, Utah and Idaho. The number of interviewees are significantly higher in some states, such as California or Florida.
+
+```{r county_sample_size, fig.cap="\\label{fig:county_sample_size} Sample Size in Each County", fig.height= 3.5, fig.width= 6, fig.pos= 'H'}
+
+# load data from data\
+lingData_binary <- LoadRData(lingData_binary)
+county_location <- LoadRData(county_location)
+# load in county graph data from package "maps"
+county_map <- map_data("county")
+
+# calculate the distribution for each county
+county_distribution <- left_join(lingData_binary, county_location, by = c("lat", "long")) %>%
+        select(-c(ZIP, lat, long, ID, STATE)) %>%
+        group_by(region, subregion) %>%
+        summarise(count = n()) %>%
+        ungroup
+# cut the data with the count for color
+break_points <- c(0, 5, 10, 15, 30, 100, 2000)
+intervals <- cut(county_distribution$count, break_points)
+break_names <- names(table(intervals))
+color_num <- sapply(intervals, function(x){
+    which(break_names == as.character(x))
+})
+# put in map data from "county_map"
+county_distribution$color <- color_num
+county_distribution <- left_join(county_map, county_distribution, by = c("region", "subregion"))
+county_distribution[is.na(county_distribution$count), "color"] <- 0 # fill with 0
+# plot the distribution of participants from each county on contiguous US map
+ggplot(data = NULL, aes(x = long, y = lat)) +
+    geom_polygon(aes(group = group, fill = factor(color)),
+                 data = county_distribution, color = "#CCCCCC",
+                 size = 0.05, alpha = 1.0) +
+    # add black states border
+    geom_polygon(aes(group = group), data = mainland_map,
+                 color = "#444444", fill = NA, size = 0.1, alpha = 0.4) +
+    scale_fill_manual(values = c("#eeeeee", "#9ebcda", "#8c96c6", "#8c6bb1", 
+                                 "#88419d", "#810f7c", "#4d004b"),
+                      labels = c("0", "1~5", "6~10", "11~15",
+                            "16~30", "31~100", ">100"), name = "Sample Size") +
+    theme_bw() + theme(panel.grid=element_blank(), panel.border=element_blank()) + # white background, no border
+    theme(axis.line = element_blank(), axis.title = element_blank(),
+          axis.ticks = element_blank(), axis.text = element_blank(),
+          plot.background = element_blank()) +
+    theme(legend.position = c(0.92, 0.30), legend.title = element_text(size = 8), legend.text = element_text(size = 6))
+    
+```
+
+## Exploratory Data Analysis
+
+The most natural way to explore (pairwise) relationship among questions is to visualize the distribution of all answers for each question. Here we use question 51 and question 52 for illustration. Question 51 is: Would you say 'Are you coming with?' as a full sentence, to mean 'Are you coming with us?'; question 52 is: Would you say 'where are you at?' to mean 'where are you?'. The answer to both questions consists of 'yes', 'no' and 'other'. These two questions seems to be very similar, as both are about the usage of prepositions. In Figure \ref{fig:ans_distribution}, each county is filled in the color corresponding to the most popular answer in that county. However, it doesn't show any clear relationship between these two questions. 
+
+```{r ans_distribution, fig.cap="\\label{fig:ans_distribution} Answers Distribution For Question 51 and 52", fig.height= 2.6, fig.width= 6, fig.pos= 'H'}
+
+# load data from data\
+lingData_county <- LoadRData(lingData_county)
+
+# We choose question 51 and question 52
+q1 <- "Q051"
+q2 <- "Q052"
+
+# Create a data frame containing the proportion of answers in each county,
+# and use the most popular one as the representative of this county.
+palette_GRY <- c("#00CC00", "#CC0000", "#AAAA00")
+ColorMax <- function(..., colors = palette_GRY){
+    # choose color corresponding to the largest component
+    #
+    # Args:
+    #  ...: a list of components
+    #  colors: a list of colors, with the same length as the components
+    # Returns:
+    #  the color with the same position in the list as the largest component
+    df <- list(...) %>% do.call(cbind, .)
+    apply(df, 1, function(x){
+        colors[which.max(x)]
+    })
+}
+
+# Question 51
+map_q1 <- select(lingData_county, region, subregion, contains(q1)) %>%
+    mutate(color = ColorMax(Q051_A1, Q051_A2, Q051_A3))
+map_q1$color <- factor(map_q1$color, levels = palette_GRY)
+# put in map data from "county_map"
+map_q1 <- left_join(county_map, map_q1, by = c("region", "subregion"))
+map_q1_plot <- ggplot(data = NULL, aes(x = long, y = lat)) +
+    geom_polygon(aes(group = group, fill = factor(color)),
+                 data = map_q1, color = "white",
+                 size = 0.1, alpha = 0.5) +
+    # add black states border
+    geom_polygon(aes(group = group), data = mainland_map,
+                 color = "#444444", fill = NA, size = 0.1, alpha = 0.2) +
+    scale_fill_identity(name = "Answers", labels = c("yes", "no", "other"),
+                        guide = guide_legend()) +
+    ggtitle("Question 51") +
+    theme_bw() + theme(panel.grid=element_blank(), panel.border=element_blank()) + # white background, no border
+    theme(axis.line = element_blank(), axis.title = element_blank(),
+          axis.ticks = element_blank(), axis.text = element_blank(),
+          plot.background = element_blank(), 
+          plot.title = element_text(size = 10), legend.title = element_text(size = 10),
+          legend.position = "bottom")
+
+
+# Question 52.
+map_q2 <- select(lingData_county, region, subregion, contains(q2)) %>%
+    mutate(color = ColorMax(Q052_A1, Q052_A2, Q052_A3))
+map_q2$color <- factor(map_q2$color, levels = palette_GRY)
+# put in map data from "county_map"
+map_q2 <- left_join(county_map, map_q2, by = c("region", "subregion"))
+map_q2_plot <- ggplot(data = NULL, aes(x = long, y = lat)) +
+    geom_polygon(aes(group = group, fill = factor(color)),
+                 data = map_q2, color = "white",
+                 size = 0.1, alpha = 0.5) +
+    # add black states border
+    geom_polygon(aes(group = group), data = mainland_map,
+                 color = "#444444", fill = NA, size = 0.1, alpha = 0.2) +
+    scale_fill_identity(name = "Answers", labels = c("yes", "no", "other"),
+                        guide = guide_legend()) +
+    ggtitle("Question 52") +
+    theme_bw() + theme(panel.grid=element_blank(), panel.border=element_blank()) + # white background, no border
+    theme(axis.line = element_blank(), axis.title = element_blank(),
+          axis.ticks = element_blank(), axis.text = element_blank(),
+          plot.background = element_blank(), 
+          plot.title = element_text(size = 10), legend.title = element_text(size = 10),
+          legend.position = "bottom")
+
+grid.arrange(map_q1_plot, map_q2_plot, ncol=2)
+
+```
+
+# Dimension Reduction Methods
+
+By doing pairwise $\chi ^2$ test, it seems that every pair of questions cannot be regarded independent. This leads us to do some dimension reduction. We use the binarized data, "lingData_binary", which contains 468 columns for questions to perform dimension reduction. Although the size is not extremely large, it is still helpful to reduce the dimension, that is, the number of columns.
+
+## Principal Component Analysis
+
+```{r PCA}
+# load data from data\
+lingData_binary <- LoadRData(lingData_binary)
+lingData_zip <- LoadRData(lingData_zip)
+lingData_county <- LoadRData(lingData_county)
+
+PCA_binary <- select(lingData_binary, contains("Q")) %>% as.matrix %>% t %>% prcomp
+PCA_zip <- select(lingData_zip, contains("Q")) %>% as.matrix %>% t %>% prcomp
+PCA_county<- select(lingData_county, contains("Q")) %>% as.matrix %>% t %>% prcomp
+
+```
+
+```{r cum_var_prop, fig.cap="\\label{fig:cum_var_prop} Cumulative Proportion of Variance of the First N Eigenvalues", fig.height= 2, fig.width= 4, fig.pos= 'H'}
+
+## Plot the cumulative proportion of variance.
+eigenvalues_binary <- PCA_binary$sdev
+eigenvalues_zip <- PCA_zip$sdev
+eigenvalues_county <- PCA_county$sdev
+data.frame(n = 1:length(eigenvalues_binary), raw = cumsum(eigenvalues_binary) / sum(eigenvalues_binary),
+                       zip = cumsum(eigenvalues_zip) / sum(eigenvalues_zip),
+                       county = cumsum(eigenvalues_county) / sum(eigenvalues_county)) %>%
+    melt(id = "n") %>%
+    ggplot(aes(x = n, y = value, group = variable, color = variable)) +
+    geom_line() +
+    xlab('N = Number of Principal Components') + ylab('Cumulative Proportion of Variance') +
+    geom_hline(yintercept = 0.9, color = "black", linetype = 2) +
+    geom_hline(yintercept = 0.8, color = "black", linetype = 2) +
+    scale_y_continuous(breaks = seq(0.1, 1, 0.1)) +
+    scale_color_discrete(name = NULL, labels = c("Original Data", "ZIP Aggregated", "County Aggregated")) +
+    theme_bw() + theme(panel.border=element_blank()) + # white background, no border
+    theme(plot.background = element_blank(), 
+          plot.title = element_text(size = 10), legend.title = element_text(size = 10),
+          legend.position = "right")
+
+# Observe the average loadings of PCA to see if the principal component is intepretable.
+# load_county <- PCA_county$x[, 1: 20]
+# rownames(load_county) <- NULL
+# colnames(load_county) <- NULL
+# avg_load <- apply(load_county, 1, mean) %>%
+#     sort(decreasing = TRUE, index.return = TRUE)
+# avg_load$x[1:10]
+# names(select(lingData_county, contains("Q")))[avg_load$ix[1:10]]
+```
+
+One of the most natural ways towards dimension reduction is PCA, i.e. Principal Component Analysis. Figure \ref{fig:cum_var_prop} shows the cumulative proportion of variance of the first $n$ eigenvalues. Observe that aggregation perfromed in the last section does reduce the noise, since with deeper level of aggregation, the slope becomes steeper. It is not strange that no clear turning point exists since the number of components is large. But it is seen that to preserve the 80% variance we need over 150 components no matter under which level of aggregation. Although PCA is lack of interpretability, it still reflects some interesting aspects of the data. By observing the average loadings of first twenty principal components, we found that the first several answers with highest average loadings are: the first answers for question 115, 77 and 63, the second answers for question 91 and 93.
+
+## Multidimensional Scaling
+
+Now we move on to perform MDS, i.e. multidimensional scaling. To perform MDS, we need to calculate the distance between each pair of questions. So first of all we need to decide which metric to apply. Continuous metric including Euclidean and Minkowski is not proper since each question column is a set of discrete data. Therefore, relative variational information (RVI) is introduced to measure the discrepancy between discrete data[@nerbonne2006progress; aghagolzadeh2007hierarchical]:
+$$
+    RVI (X, Y) = 2 -\frac{H(X) + H(Y)}{H(X, Y)},
+$$
+
+where $H(X, Y)$ is the joint entropy of $X$ and $Y$, and $H(\cdot)$ is the entropy. It can be check to be a metric taking values in $[0, 1]$. The left part of Figure \ref{fig:MDS} displays the two dimensional MDS projection using the RVI metric distance matrix.
+
+```{r MDS, fig.cap="\\label{fig:MDS} Two Dimensional Projection of MDS with RVI Metric (Right: with cluster result)", fig.height= 3, fig.width= 6, fig.pos= 'H'}
+
+# load in quest_distance_RVI from data/
+quest_distance_RVI <- LoadRData(quest_distance_RVI)
+
+# put the id of all existing questions here
+quest_id <- c(50:107, 109:111, 115, 117:121)
+
+# MDS using Relative Variational Information.
+MDS <- cmdscale(quest_distance_RVI) %>% data.frame
+MDS$id <- quest_id
+before <- ggplot(MDS, aes(X1, X2)) + geom_point() +
+    geom_text(aes(label = id), hjust = -0.2, vjust = -0.3, position = "jitter", size = 2) +
+    xlab("MDS Coordinate 1") + ylab("MDS Coordinate 2") + 
+    theme_bw() + theme(panel.border=element_blank()) # white background, no border
+
+# MDS + K-medoids clustering using MDS data.
+# Using Average Silhouette Width Criterion to select the number of clusters.
+# D <- Distance(MDS, metric = RelVarInfo)
+# sil_width <- sapply(3: 20, function(n){
+#     temp <- KMedoids(select(MDS, -(id)), n, cluster.only = TRUE)
+#     cluster.stats(D, temp)$avg.silwidth
+# })
+# sil_df <- data.frame(clusters = 3:20, sil = sil_width)
+# sil_plot <- ggplot(sil_df, aes(clusters, sil)) + geom_line(linetype = 2) +
+#     xlab("Number of Clusters") + ylab("Average Silhouette Width")
+
+# plot the silhouette width for each sample in each cluster.
+MDS_km <- KMedoids(select(MDS, -(id)), 10)
+# plot(silhouette(MDS_km$clustering, quest_distance_RVI))
+
+# Visualize the data by MDS.
+medoid_id <- MDS_km$medoids
+medoid_df <- data.frame(medoids = MDS[medoid_id, ], labels = quest_id[medoid_id])
+after <- ggplot() + geom_point(aes(x = X1, y = X2, color = factor(MDS_km$clustering)), data = MDS) +
+    theme(legend.position = "none") +
+    geom_text(aes(x = medoids.X1, y = medoids.X2, label = labels),
+              hjust = -0.2, vjust = -0.3, data = medoid_df, size = 2) +
+    geom_point(aes(x = medoids.X1, y = medoids.X2), data = medoid_df, shape = 2) +
+    xlab("MDS Coordinate 1") + ylab("MDS Coordinate 2") +
+    theme_bw() + theme(panel.border=element_blank()) + # white background, no border
+    theme(legend.position = "null")
+
+# View questions in each cluster.
+# filter(quest.use, qnum %in% quest.id[which(MDS_km$clustering == 10)])
+# View the medoids of each cluster.
+# medoids <- quest.id[MDS_km$medoids]
+# quest.mat[[2]][medoids]
+
+grid.arrange(before, after, ncol=2)
+
+```
+
+Once the MDS projection is obtained, we may proceed to cluster them using the projected distance. The hierarchical clustering and k-means clustering are not proper in this case since several of the 67 questions here focus on very similar questions, such as question 68, 69, 70 and 71. Besides, hierarchical clustering is somehow greedy and might no be robust while the result from k-means is hard to interpret. Therefore, we use k-medoids clustering algorithm, which is the same as k-means except that it only uses the sample point as cluster centers. Thus, the center can be regarded as the representative of that cluster and hence more interpretable. These centers are then treated as topics and the other questions in its cluster as the ones related to this topic. When perfroming k-mediods, we use the result from k-means as the initial guess of medoids to achieve quick convergence as well as better clustering result.
+
+To determine the number of clusters, we use the average silhouette width criterion. When plotting the average silhouette width versus the number of clusters, it is seen that 8 or 10 might be good choices even though less than 5 topic might give large silhouette width, since we believe that there should be more topics in this research and we want more clusters to capture these topics. We select 10 as the number of clusters. In fact, one of these clusters contains two questions about the usage of ¡°anymore¡± and another cluster contains four questions about the appellation of grandparents. The right part of Figure \ref{fig:MDS} displays each clusters together with their medoids. The selected questions are: 53, 54, 59, 69, 72, 82, 89, 93, 95 and 98.
+
+## Sample Clustering
+
+After trying to reduce the dimension regarding the questions, we now move on to cluster the participants and try extracting cultural differences among people. Hopefully, this research can be used to study the separation of (maybe geographically) different subcultures.
+
+```{r sample_cluster_a, fig.cap="\\label{fig:sample_cluster_a} Relationship among the First Four Principle Components", fig.height= 4, fig.width= 4, fig.pos= 'H'}
+
+# load in county aggregated data from data\
+lingData_county <- LoadRData(lingData_county)
+# do PCA on county data
+sample_mat <- select(lingData_county, contains("Q")) %>% as.matrix
+sample_mat_mean <- apply(sample_mat, 2, mean)
+sample_mat <- sample_mat - rep(1, nrow(sample_mat)) %*% t(sample_mat_mean)
+PCA_county <- irlba(sample_mat)$u %>% data.frame
+names(PCA_county) <- paste0("P", 1: ncol(PCA_county))
+# Scatterplots for the first 4 principal components of county-level aggregation
+ggpairs(PCA_county[, 1:4], lower = list(continuous = "points"),
+        upper = list(continuous = "density"),
+        axisLabels = "none", title = "(a)") +
+    theme_bw() + theme(panel.border=element_blank())
+```
+
+```{r sample_cluster_b, fig.cap="\\label{fig:sample_cluster_b} Average Silhouette Width using N Clusters", fig.height= 1.5, fig.width= 2.7, fig.pos= 'H'}
+# Use county-level aggregated data to perform PCA analysis.
+# Use only the first two components
+PCA <- PCA_county[, 1:2]
+names(PCA) <- c("P1", "P2")
+D <- rdist(PCA)
+
+### Average Silhouette Width
+sil_PCA <- sapply(2: 20, function(n){
+    cluster <- kmeans(PCA, n, 100)$cluster
+    cluster.stats(D, cluster)$avg.silwidth
+})
+
+data.frame(n = 2:20, sil = sil_PCA) %>%
+    ggplot(aes(n, sil)) + geom_line(linetype = 2) +
+    xlab("N = Number of Clusters") + ylab("Average Silhouette Width") +
+    theme_bw() + theme(panel.border=element_blank(), axis.title = element_text(size = 7))
+```
+
+```{r sample_cluster_c, include=FALSE}
+# It is seen that 4 clusters are most adequate. We plot the silhouette width for each sample
+# Note: fviz_silhouette() print results so we have to plot it in the next chunk
+
+# define color for these four clusters
+color_4 <- c('#377eee','#ff4422','#fec44f','#a85eb3')
+
+PCA_kmeans <- kmeans(PCA, 4, 1000)
+sample_cluster_c <- fviz_silhouette(silhouette(PCA_kmeans$cluster, D)) +
+    ylab("Average Silhouette Width") + ggtitle("(a)") +
+    scale_color_manual(name = "cluster", values = color_4) +
+    theme_bw() + theme(panel.border=element_blank(), panel.grid = element_blank()) +
+    theme(axis.line = element_blank(), axis.ticks.x = element_blank(), 
+          axis.text.x = element_blank(), legend.position = "null")
+```
+
+```{r sample_cluster_d, fig.cap="\\label{fig:sample_cluster_d} K-means Clustering Result with 4 Clusters", fig.height= 2, fig.width= 5, fig.pos= 'H'}
+# PCA + k means clustering. Scatterplot in the principal components space.
+PCA$cluster <- PCA_kmeans$cluster
+
+sample_cluster_d <- ggplot(PCA, aes(P1, P2, color = factor(cluster))) +
+    geom_point(alpha = 0.5) +
+    theme(legend.position = "none") +
+    scale_color_manual(name = "cluster",
+                       values = color_4) +
+    xlab("Principal Component 1") + ylab("Principal Component 2") + ggtitle("(b)") +
+    theme_bw() + theme(panel.border=element_blank(), panel.grid = element_blank()) +
+    theme(legend.title = element_text(size = 7), legend.text = element_text(size = 7), 
+          axis.title = element_text(size = 8)) +
+    theme(axis.line = element_blank(),
+          axis.ticks = element_blank(), axis.text = element_blank(),
+          axis.title = element_text(size = 8)) 
+
+grid.arrange(sample_cluster_c, sample_cluster_d, ncol=2)
+
+```
+
+In this section, we use PCA, and then k-means on the countylevel aggregated binary data for illustration and visualization, see Figure \ref{fig:sample_cluster_a} to \ref{fig:sample_cluster_d}. Figure \ref{fig:sample_cluster_a} is a set of density plots (upper triangular parts) and scatterplots (lower triangular parts) of first four principal components. It seems that the first two components define three clusters since the scatterplot has a clover shape. But the third and the fourth components are not informative. Thus we conduct PCA on the first two dimensions. Figure \ref{fig:sample_cluster_b} displays the average silhouette width for different number of clusters. Obviously the best choice is to go with 4 clusters. Figure \ref{fig:sample_cluster_d} plots the silhouette width for each cluster (left panel) as well as the clustering result in the space of first two principal components (right panel). The pattern shows that 4 clusters are all desirable in terms of both the group size and the average silhouette width. Notably, those points lying on the boundaries indicate the existence of continuum. Theoretically, boundary points usually have small silhouette value, thus can be used to find possible locations of linguistic continuum.
+
+```{r kmeans_4_county_map, fig.cap="\\label{fig:kmeans_4_county_map} K-Means Clustering Result with 4 Clusters on Contiguous US Map", fig.height= 3.5, fig.width= 6, fig.pos= 'H'}
+map_df <- select(lingData_county, region, subregion)
+map_df$cluster <- PCA_kmeans$cluster
+map_df$silhouette <- silhouette(PCA_kmeans$cluster, D)[, 3] 
+map_df <- left_join(county_map, map_df, by = c("region", "subregion"))
+
+# k-means result on us map
+ggplot(mainland_map, aes(long, lat)) +
+    geom_polygon(aes(group = region), color = "black", fill = "white", alpha = 0.4) +
+    geom_polygon(aes(x = long, y = lat, group = group, fill = factor(cluster)),
+                 data = map_df, size = 0.1, color = "black") +
+    theme(legend.position = "none") +
+    scale_fill_manual(name = "cluster", na.value = "#EEEEEE",
+                      values = color_4) + 
+    xlab("Longitude") + ylab("Latitude") +
+    theme_bw() + theme(panel.grid=element_blank(), panel.border=element_blank()) + # white background, no border
+    theme(axis.line = element_blank(), axis.title = element_blank(),
+          axis.ticks = element_blank(), axis.text = element_blank(),
+          plot.background = element_blank()) +
+    theme(legend.position = c(0.92, 0.30), legend.title = element_text(size = 8), legend.text = element_text(size = 6))
+
+```
+
+Figure \ref{fig:kmeans_4_county_map} shows the clustering in the map. The yellow areas correspond to eastern parts, the red parts correspond to southern part, the blue areas correspond to western parts, mid-western parts and Great Lake district, and the green parts correspond to middle parts of US. The gray areas have no interviewees. This clustering is reasonable. Figure \ref{fig:silhouette_4_county_map} displays the silhouette width of each county. The light areas have high silhouette width and hence can be regarded as ¡°pure¡± in its cluster, while dark areas have low silhouette and can be regarded as the ¡°continuum¡± between two clusters.
+
+An interesting fact is, the clustering is also somehow geographical, since the 4 linguistic cluster of contiguous US is very similar to the  four statistical census regions defined by United States Census Bureau: Northeast, Midwest, South and West. Only that the north part of Midwest region is combined with the West region in our clustering. We will discuss the robustness of this finding in the next section.
+
+```{r silhouette_4_county_map, fig.cap="\\label{fig:silhouette_4_county_map} Silhouette Width with 4 Clusters on Contiguous US Map", fig.height= 3, fig.width= 5, fig.pos= 'H'}
+# Silhouette Width Visualization in the map. Save this in original for comparison
+ggplot(mainland_map, aes(long, lat)) +
+    #geom_polygon(aes(group = region), color = "black", fill = "white") +
+    geom_polygon(aes(x = long, y = lat, group = group, fill = silhouette),
+                 data = map_df, size = 0.01, color = "black") +
+    theme(legend.position = "none") +
+    scale_fill_gradient2(na.value = "#FFFFFF", low = "#883388", high = "#EEEEEE",
+                         mid = "#E466E4", midpoint = 0.3) +
+    xlab("Longitude") + ylab("Latitude") +
+    theme_bw() +
+    theme(panel.border = element_blank(),
+          axis.line = element_blank(), axis.title = element_blank(),
+          axis.ticks = element_blank(), axis.text = element_blank(),
+          plot.background = element_blank(),
+          panel.grid = element_blank(),
+          legend.position = c(0.92, 0.30), legend.title = element_text(size = 8), legend.text = element_text(size = 6))
+
+```
+
+To study the robustness of the clustering, we also present the result using 3 instead of 4 clusters in Figure \ref{fig:kmeans_3_county_map}. It is observed clearly that the color of silhouette map is much deeper. Moreover, the new cluster $\#1$ is roughly the union of old cluster $\#2$ and $\#3$ while the other two clusters are quite similar. Both facts tell the fact that 4 clusters is an optimal choice for k-means algorithm here.
+
+```{r kmeans_3_county_map, fig.cap="\\label{fig:kmeans_3_county_map} K-Means Clustering Result (Upper) and Silhouette Width (Lower) with 3 Clusters on Contiguous US Map", fig.height= 4.5, fig.width= 4, fig.pos= 'H'}
+# Plot using cluster number = 3
+
+# define color for these three clusters
+color_3 <- c('#377eee','#ff4422','#fec44f')
+
+# PCA + k means clustering. Scatterplot in the principal components space.
+PCA_kmeans <- kmeans(PCA, 3, 1000) # changed to 3
+PCA$cluster <- PCA_kmeans$cluster
+
+map_df <- select(lingData_county, region, subregion)
+map_df$cluster <- PCA_kmeans$cluster
+map_df$silhouette <- silhouette(PCA_kmeans$cluster, D)[, 3] 
+map_df <- left_join(county_map, map_df, by = c("region", "subregion"))
+
+# plots are the same
+
+# k-means result on us map
+kmeans_3_county_map <- ggplot(mainland_map, aes(long, lat)) +
+    geom_polygon(aes(group = region), color = "black", fill = "white", alpha = 0.4) +
+    geom_polygon(aes(x = long, y = lat, group = group, fill = factor(cluster)),
+                 data = map_df, size = 0.1, color = "black") +
+    theme(legend.position = "none") +
+    scale_fill_manual(name = "cluster", na.value = "#EEEEEE",
+                      values = color_3) + # changed to 3
+    xlab("Longitude") + ylab("Latitude") +
+    theme_bw() + theme(panel.grid=element_blank(), panel.border=element_blank()) + # white background, no border
+    theme(axis.line = element_blank(), axis.title = element_blank(),
+          axis.ticks = element_blank(), axis.text = element_blank(),
+          plot.background = element_blank()) +
+    # transparent background used to avoid overlap
+    theme(legend.position = c(0.92, 0.30), legend.background = element_rect(fill="transparent"),
+          legend.title = element_text(size = 8), legend.text = element_text(size = 6))
+
+# Silhouette Width Visualization in the map.
+silhouette_3_county_map <- ggplot(mainland_map, aes(long, lat)) +
+    #geom_polygon(aes(group = region), color = "black", fill = "white") +
+    geom_polygon(aes(x = long, y = lat, group = group, fill = silhouette),
+                 data = map_df, size = 0.01, color = "black") +
+    theme(legend.position = "none") +
+    scale_fill_gradient2(na.value = "#FFFFFF", low = "#883388", high = "#EEEEEE",
+                         mid = "#E466E4", midpoint = 0.3) +
+    xlab("Longitude") + ylab("Latitude") +
+    theme_bw() +
+    theme(panel.border = element_blank(),
+          axis.line = element_blank(), axis.title = element_blank(),
+          axis.ticks = element_blank(), axis.text = element_blank(),
+          plot.background = element_blank(),
+          panel.grid = element_blank(),
+          legend.position = c(0.92, 0.30), legend.background = element_rect(fill="transparent"), 
+          legend.title = element_text(size = 8), legend.text = element_text(size = 6))
+
+grid.arrange(kmeans_3_county_map, silhouette_3_county_map, ncol=1)
+
+```
+
+# Stability of findings to perturbation
+
+As discussed in the last section, the 4 linguistic cluster is very similar to the 4 regions defined by the US Census Bureau. To analyze its robustness, perturbation analysis is often introduced. Usually, the problem involves a lot of samples to be clustered and hence it is not easy to identify which ones of them or which factors influence the clustering result significantly. Thus, we need to test the stability of the clustering. A natural way is to perturbate the data and see the difference of clustering results.
+
+```{r perturbation}
+# load in perturbation functions from data\
+source("R/perturbation.R")
+
+```
+
+In this section, we will focus on perturbing both questions and answers. To perturb questions, we randomly delete a proportion $\alpha$ of columns (questions); as for perturbing answers, we randomly alter the values of a proportion $\alpha$ of entries from each column. $\alpha$ is a parameter controling the perturbation level. Just a reminder, here we are going to use different levels of both pertubation to test the stability of k-means clustering based on the first two principle components from PCA to see how the result is changed.
+
+```{r}
+# The clusters of original data.
+original_cluster <- Bin2County(lingData_bin_mat) %>% CountyCluster(centers = 4, n_components = 2)
+
+num_rep <- 20 # number of repeat experiments
+alpha <- (0.01 * 2 ^ (1:6)) %>% rep(each = num_rep) # alpha for experiment
+times <- rep(1: num_rep, length(alpha))
+
+# PCA + k means on answer-perturbed data
+PCA_kmeans_answer_perturbed <- lapply(0: length(alpha), function(i){
+    if (i == 0) {return(original_cluster)}
+    temp <- AnswerPerturbedCluster(alpha[i])
+    names(temp)[3] <- paste(alpha[i], times[i], sep = "_")
+    return(temp)
+}) %>% Reduce(function(x, y){
+    inner_join(x, y, by = c("region", "subregion"))
+}, .)
+# The dissimilarity matrix among answer-perturbed data and the original one
+dissimilarity_answer_preturbed <- PCA_kmeans_answer_perturbed %>%
+    select(-c(region, subregion)) %>% Distance(Hungry)
+
+# PCA + k means on question-perturbed data
+PCA_kmeans_question_perturbed <- lapply(0: length(alpha), function(i){
+    if (i == 0) {return(original_cluster)}
+    temp <- QuestionPerturbedCluster(alpha[i])
+    names(temp)[3] <- paste(alpha[i], times[i], sep = "_")
+    return(temp)
+}) %>% Reduce(function(x, y){
+    inner_join(x, y, by = c("region", "subregion"))
+}, .)
+# The dissimilarity matrix among question-perturbed data and the original one
+dissimilarity_question_preturbed <- PCA_kmeans_question_perturbed %>% 
+    select(-c(region, subregion)) %>% Distance(Hungry)
+
+```
+
+After obtaining the clustering result of pertubated data, we calculate the dissimilarity among results to see whether or not it is robust. A natural way to calculate the dissimilarity is simply using the proportion of coincidence, i.e. $\#\{R_1(i) \neq R_2(i)\}/n$, where $R_k(i)$ is the cluster to which the $i$-th datapoint belongs under the $k$-th clustering result and $n$ is the number of points being clustered. Since  the labels of clusters is interchangeable, we need to take the maximum over all possible permutations of cluster labels, which is exactly the assignment problem and can be calculated with Hungarian method[@kuhn1955hungarian]. We can tell the robustness of our finding by comparing the clusters of original data and those of perturbated data. Figure \ref{fig:dissimilarity_boxplot} displays the dissimilarity of clusters with respect to perturbation levels, 20 repetitions are done per level for both questions and answers perturbation. It is seen clearly from the boxplot that the result is stable since when the perturbation level is low the dissimilarity is quite low and when the perturbation level is high, the dissimilarity is still not high: only very few of them goes beyond 20% even when the perturbation level is as high as 32% under both types of perturbation.
+
+```{r dissimilarity_boxplot, fig.cap="\\label{fig:dissimilarity_boxplot} Dissimilarity among Clustering results", fig.height= 2.5, fig.width= 6, fig.pos= 'H'}
+# dissimilarity boxplot for PCA + k means on answer-perturbed data
+error_answer_perturbed <- data.frame(err = dissimilarity_answer_preturbed[1:length(alpha)],
+                              plevel = as.factor(alpha)) %>% ggplot(aes(plevel, err, group = plevel)) +
+    geom_boxplot() + ylab("Dissimilarity among Clustering results") + xlab("Perturbation Level") +
+    ggtitle("Answer Pertrubed") +
+    theme_bw() + theme(panel.grid=element_blank(), panel.border=element_blank()) + # white background, no border
+    theme(plot.background = element_blank())
+
+error_question_perturbed <- data.frame(err = dissimilarity_question_preturbed[1:length(alpha)],
+                              plevel = as.factor(alpha)) %>% ggplot(aes(plevel, err, group = plevel)) +
+    geom_boxplot() + ylab("Dissimilarity among Clustering results") + xlab("Perturbation Level") +
+    ggtitle("Question Pertrubed") +
+    theme_bw() + theme(panel.grid=element_blank(), panel.border=element_blank()) + # white background, no border
+    theme(plot.background = element_blank())
+
+grid.arrange(error_answer_perturbed, error_question_perturbed, ncol=2)
+
+```
+
+Figure \ref{fig:perturbed_county_map} shows the clustering result on contiguous US map with 32% and 64% of the questions and the corresponding answers deleted, respectively. It is clear that even with pertrubation level as high as 64%, the geographical pattern still largely holds. This once again proved the robustness of the finding.
+
+In fact, the perturbed data and the perturbation analysis can be performed to (and not limited to) everything we mentioned in the previous sections. But we are not going to discuss them in this report.
+
+```{r perturbed_county_map, fig.cap="\\label{fig:perturbed_county_map} K-Means Clustering Result with 4 Clusters on Contiguous US Map with Perturbation", fig.height= 7, fig.width= 6, fig.pos= 'H'}
+
+# load in county aggregated data from data\
+lingData_county <- LoadRData(lingData_county)
+# randomly remove 32%/64% questions
+lingData_county32 <- lingData_county[, -sample(3:ncol(lingData_county), floor((ncol(lingData_county)-2) * 0.32))]
+lingData_county64 <- lingData_county[, -sample(3:ncol(lingData_county), floor((ncol(lingData_county)-2) * 0.64))]
+# do PCA on perturbed county data, everything's the same
+PCA_kmeans_quick <- function(data) {
+    sample_mat <- select(data, contains("Q")) %>% as.matrix
+    sample_mat_mean <- apply(sample_mat, 2, mean)
+    sample_mat <- sample_mat - rep(1, nrow(sample_mat)) %*% t(sample_mat_mean)
+    PCA_county <- irlba(sample_mat, nu = 2, nv = 2)$u %>% data.frame
+    names(PCA_county) <- paste0("P", 1: ncol(PCA_county))
+    PCA_kmeans <- kmeans(PCA_county, 4, 1000)
+    map_df <- select(lingData_county, region, subregion)
+    map_df$cluster <- PCA_kmeans$cluster
+    map_df <- left_join(county_map, map_df, by = c("region", "subregion"))
+    return (map_df)
+}
+
+map_df_32 <- PCA_kmeans_quick(lingData_county32)
+map_df_64 <- PCA_kmeans_quick(lingData_county64)
+
+# k-means result on us map for therse two perturbed data respectively
+thirtytwo <- ggplot(mainland_map, aes(long, lat)) +
+    geom_polygon(aes(group = region), color = "black", fill = "white", alpha = 0.4) +
+    geom_polygon(aes(x = long, y = lat, group = group, fill = factor(cluster)),
+                 data = map_df_32, size = 0.1, color = "black") +
+    theme(legend.position = "none") +
+    scale_fill_manual(name = "cluster", na.value = "#EEEEEE",
+                      values = color_4) +
+    xlab("Longitude") + ylab("Latitude") + ggtitle("Perturbation Level = 32%") +
+    theme_bw() + theme(panel.grid=element_blank(), panel.border=element_blank()) + # white background, no border
+    theme(axis.line = element_blank(), axis.title = element_blank(),
+          axis.ticks = element_blank(), axis.text = element_blank(),
+          plot.background = element_blank()) +
+    # transparent background used to avoid overlap
+    theme(legend.position = c(0.92, 0.30), legend.background = element_rect(fill="transparent"), 
+          legend.title = element_text(size = 8), legend.text = element_text(size = 6))
+
+sixtyfour <- ggplot(mainland_map, aes(long, lat)) +
+    geom_polygon(aes(group = region), color = "black", fill = "white", alpha = 0.4) +
+    geom_polygon(aes(x = long, y = lat, group = group, fill = factor(cluster)),
+                 data = map_df_64, size = 0.1, color = "black") +
+    theme(legend.position = "none") +
+    scale_fill_manual(name = "cluster", na.value = "#EEEEEE",
+                      values = color_4) +
+    xlab("Longitude") + ylab("Latitude") + ggtitle("Perturbation Level = 64%") +
+    theme_bw() + theme(panel.grid=element_blank(), panel.border=element_blank()) + # white background, no border
+    theme(axis.line = element_blank(), axis.title = element_blank(),
+          axis.ticks = element_blank(), axis.text = element_blank(),
+          plot.background = element_blank()) +
+    # transparent background used to avoid overlap
+    theme(legend.position = c(0.92, 0.30), legend.background = element_rect(fill="transparent"),
+          legend.title = element_text(size = 8), legend.text = element_text(size = 6))
+
+grid.arrange(thirtytwo, sixtyfour, ncol = 1)
+
+```
+
+# Reference {-}
