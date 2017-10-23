@@ -1,0 +1,36 @@
+\documentclass{article}
+
+\usepackage{geometry}
+\geometry{verbose,tmargin=1in,bmargin=1in,lmargin=1in,rmargin=1in}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\setlength{\parskip}{\smallskipamount}
+\setlength{\parindent}{0pt}
+\usepackage{amsthm}
+\usepackage{amsmath}
+
+
+\begin{document}
+
+\title{Homework 3}
+
+\author{Alexander Brandt\\STAT 215A}
+
+\maketitle
+
+\section{EM Algorithm}
+
+\subsection{}
+
+The distribution the samples \(X_i\) are drawn from:
+\[ P_M(X) = \pi \frac{\mu_0^X e^{-\mu_0}}{X!} + (1 - \pi)\frac{\mu_1^X e^{-\mu_1}}{X!} \]
+The observation vector then, is:
+\[ X = (X_1, X_2, ... , X_n)' \]
+
+\subsection{}
+
+
+
+
+
+\end{document}
