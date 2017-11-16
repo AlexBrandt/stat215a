@@ -1,0 +1,93 @@
+\documentclass{article}
+
+\usepackage{geometry}
+\geometry{verbose,tmargin=1in,bmargin=1in,lmargin=1in,rmargin=1in}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\setlength{\parskip}{\smallskipamount}
+\setlength{\parindent}{0pt}
+\usepackage{amsthm}
+\usepackage{amsmath}
+
+\DeclareMathOperator*{\argmax}{arg\,max}
+
+\begin{document}
+
+\title{Homework 3}
+
+\author{Alexander Brandt\\STAT 215A}
+
+\maketitle
+
+\section{Classification}
+
+\subsection*{7.B.1}
+
+\subsubsection*{a}
+
+True: since from the definition of the CDF/PDF relationship:
+\[\frac{\partial \Phi(x)}{\partial x} = \phi(x) \]
+\subsubsection*{b}
+True: again, this is a basic CDF/PDF relationship:
+\[ \int_{-\infty}^{x} \phi(z) dz = \Phi(x) \]
+\subsubsection*{c}
+False: this is a basic calculus definition:
+\[ \int_{x}^{x} \phi(z) dz = 0 \]
+\subsubsection*{d}
+True: From above, and part e:
+\[ \int_{x}^{x} \phi(z) dz + \int_{-\infty}^{x} \phi(z) dz = 0 + \Phi(x)\]
+\subsubsection*{e}
+True:  Basic CDF/PDF relationship:
+\[ \int_{-\infty}^{x} \phi(z) dz = \Phi(x) \]
+\subsubsection*{f}
+True:  Given CDF/PDF relationship:
+\begin{align*}
+P( x < Z < x+h) &= \lim_{x \to h} \int_{x}^{x+h} \phi(z) dz \\
+&= \Phi(x+h) - \Phi(x)
+\end{align*}
+And basic calculus:
+\[\lim_{x \to h} \frac{\Phi(x+h) - \Phi(x)}{h} = \phi(x) \]
+Thus:
+\[P( x < Z < x+h) = h \phi(x) \]
+\subsection*{7.B.2}
+\subsubsection*{a}
+\(X_i\) is a column vector of 1 (the intercept), the educational level in years
+of school the individual has attended, the income level of the individual in dollars,
+and the gender of the individual (1 for male, 0 for female).  \(\beta_i\) is a column
+vector of the weights associated with for the probit model.
+\subsubsection*{b}
+Random and Latent
+\subsubsection*{c}
+\(U_i\) is i.i.d. \(N(0, 1)\), and independent of the prediction variables.
+\subsubsection*{d}
+The log likihood function is a sum with one term for each subject.
+\subsection{}
+False.
+\begin{align*}
+\text{Difference} &= \Phi(X_{Harry}'\beta) - \Phi(X_{George}'\beta)\\
+&= \Phi(.29) - \Phi(.19)\\
+&= 3.87\%
+\end{align*}
+\section*{7.B.3}
+I think I will be using \(x_i\) in the opposite orientation that the authors of the paper do.
+\subsection*{Proof of 5.1}
+Given \( (X_i' X_i)^{-1} = (X'X - x_i x_i')^{-1} \), and the Sherman Morrison
+formula:
+\begin{align*}
+(X_i' X_i)^{-1} &= (X' X)^{-1} + \frac{(X' X)^{-1} x_i x_i' (X' X)^{-1}}{1 - x_i' X^{-1} x_i}\\
+&= (X' X)^{-1} + \frac{(X' X)^{-1} x_i x_i' (X' X)^{-1}}{1 - h_i}
+\end{align*}
+\subsection*{Proof of 5.5}
+Continuing from above:
+\begin{align*}
+\hat{\beta_i} &= (X_i' X_i)^{-1}(X'Y - x_i y_i)\\
+&= \left[(X'X)^{-1} + \frac{(X' X)^{-1} x_i x_i' (X' X)^{-1}}{1 - h_i}\right](X'Y - x_i y_i)\\
+&= (X' X)^{-1} X' Y - (X' X)^{-1} x_i y_i + \frac{(X' X)^{-1} x_i x_i' X' Y}{1 - h_i} - \frac{(X' X)^{-1} x_i x_i' x_i y_i}{1 - h_i}\\
+&= \hat{\beta} - \frac{(X' X)^{-1} x_i}{1 - h_i}\left[y_i(1 - h_i) - x_i' \hat{\beta} + h_i y_i \right]\\
+&= \hat{\beta} - \frac{(X' X)^{-1} x_i}{1 - h_i}\left[y_i - x_i' \hat{\beta}\right]\\
+&= \hat{\beta} - \frac{(X' X)^{-1} x_i r_i}{1 - h_i}\\
+\hat{\beta} - \hat{\beta_i} &= \frac{(X' X)^{-1} x_i r_i}{1 - h_i}
+\end{align*}
+I found this proof to be tricky, so I spent a lot of time reading through linear
+algebra/linear regression texts.  In particular Linear Regresion Analysis by Seber and Lee (2003), especially Chapter 10, we really helpful in helping me complete these proofs.
+\end{document}
