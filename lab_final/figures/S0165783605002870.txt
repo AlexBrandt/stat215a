@@ -1,0 +1,25 @@
+Yanjun Wang, Qun Liu, Comparison of Akaike information criterion (AIC) and Bayesian information criterion (BIC) in selection of stock–recruitment relationships, In Fisheries Research, Volume 77, Issue 2, 2006, Pages 220-225, ISSN 0165-7836, https://doi.org/10.1016/j.fishres.2005.08.011.
+(http://www.sciencedirect.com/science/article/pii/S0165783605002870)
+Keywords: Stock–recruitment model; Maximum likelihood; AIC; BIC
+
+    final_testset_correlations voxel_name best_method
+V1                  0.46013295         V1       EC-SV
+V2                  0.52738720         V2       EC-SV
+V3                  0.45265275         V3  Package CV
+V4                  0.47959658         V4       EC-SV
+V5                  0.50333942         V5         AIC
+V6                  0.46547010         V6          CV
+V7                  0.51441616         V7       EC-SV
+V8                  0.53194851         V8         AIC
+V9                  0.54876383         V9  Package CV
+V10                 0.16325771        V10         BIC
+V11                 0.22881389        V11       EC-SV
+V12                 0.47577744        V12         AIC
+V13                 0.26678541        V13         AIC
+V14                 0.29745503        V14         AIC
+V15                 0.52170079        V15         AIC
+V16                 0.07446250        V16         AIC
+V17                 0.35691117        V17         AIC
+V18                 0.42511160        V18       Ridge
+V19                 0.34618609        V19       EC-SV
+V20                 0.01045314        V20       EC-SV

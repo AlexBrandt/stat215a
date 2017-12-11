@@ -1,0 +1,3 @@
+Elena Giménez, Mattia Crespi, M. Selmira Garrido, Antonio J. Gil, Multivariate outlier detection based on robust computation of Mahalanobis distances. Application to positioning assisted by RTK GNSS Networks, In International Journal of Applied Earth Observation and Geoinformation, Volume 16, 2012, Pages 94-100, ISSN 0303-2434, https://doi.org/10.1016/j.jag.2011.11.011.
+(http://www.sciencedirect.com/science/article/pii/S0303243411002029)
+Keywords: RTK GNSS Networks; Outlier detection; Robust statistics; Mahalanobis distance
